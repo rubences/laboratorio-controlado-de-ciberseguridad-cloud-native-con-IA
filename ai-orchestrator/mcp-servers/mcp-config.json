@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "kubescape": {
+      "command": "kubescape",
+      "args": ["mcp", "start"]
+    },
+    "k8sgpt": {
+      "command": "k8sgpt",
+      "args": ["mcp", "serve"]
+    },
+    "hexstrike": {
+      "command": "python",
+      "args": ["-m", "hexstrike.mcp.server", "--config", "config.yaml"]
+    }
+  }
+}

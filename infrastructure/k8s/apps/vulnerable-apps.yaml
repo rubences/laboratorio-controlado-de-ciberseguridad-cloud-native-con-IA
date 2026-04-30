@@ -1,0 +1,94 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vulnerable-apps
+---
+# OWASP Juice Shop
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juice-shop
+  namespace: vulnerable-apps
+  labels:
+    app: juice-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juice-shop
+  template:
+    metadata:
+      labels:
+        app: juice-shop
+    spec:
+      containers:
+      - name: juice-shop
+        image: bkimminich/juice-shop:latest
+        ports:
+        - containerPort: 3000
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: juice-shop
+  namespace: vulnerable-apps
+spec:
+  selector:
+    app: juice-shop
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+---
+# OWASP WebGoat
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webgoat
+  namespace: vulnerable-apps
+  labels:
+    app: webgoat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webgoat
+  template:
+    metadata:
+      labels:
+        app: webgoat
+    spec:
+      containers:
+      - name: webgoat
+        image: webgoat/webgoat:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: WEBWOLF_HOST
+          value: "127.0.0.1"
+        - name: WEBWOLF_PORT
+          value: "9090"
+        resources:
+          limits:
+            memory: "1024Mi"
+            cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webgoat
+  namespace: vulnerable-apps
+spec:
+  selector:
+    app: webgoat
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
