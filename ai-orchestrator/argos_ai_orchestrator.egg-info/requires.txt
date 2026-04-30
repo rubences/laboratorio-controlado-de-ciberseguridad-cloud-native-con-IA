@@ -1,0 +1,13 @@
+fastapi>=0.103.1
+uvicorn>=0.23.2
+pydantic>=2.3.0
+langgraph>=0.0.26
+langchain>=0.1.0
+langchain-community>=0.0.13
+langchain-openai>=0.0.8
+mcp>=0.1.0
+
+[dev]
+ruff>=0.3.0
+bandit>=1.7.7
+mypy>=1.9.0

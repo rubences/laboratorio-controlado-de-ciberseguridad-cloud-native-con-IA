@@ -38,7 +38,7 @@ try {
 
 Write-Host "`n[3/3] Ejecutando análisis SAST de seguridad (Bandit)..." -ForegroundColor Yellow
 try {
-    bandit -r ./app -c pyproject.toml --quiet
+    python -m bandit -r ./app -c pyproject.toml --quiet
     Write-Host "SAST Bandit: PASSED" -ForegroundColor Green
 } catch {
     Write-Host "SAST Bandit: FAILED. Revisa las vulnerabilidades de Python detectadas." -ForegroundColor Red

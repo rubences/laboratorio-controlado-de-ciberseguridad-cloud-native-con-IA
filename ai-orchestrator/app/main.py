@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 import uuid
 import logging
 import time
+import os
 from .agents.supervisor import run_supervisor_workflow
 
 # Configure Logging
@@ -14,9 +15,14 @@ logger = logging.getLogger("argos.api")
 API_KEY_NAME = "X-ARGOS-API-KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-# Dummy verification for demonstration (Should use env vars/secrets in prod)
 def get_api_key(api_key_header: str = Security(api_key_header)) -> str:
-    if api_key_header == "argos_super_secret_key_2026":
+    # Read key from environment securely instead of hardcoding
+    expected_key = os.environ.get("ARGOS_API_KEY")
+    if not expected_key:
+        logger.error("ARGOS_API_KEY environment variable is missing. API is locked.")
+        raise HTTPException(status_code=500, detail="Server misconfiguration")
+        
+    if api_key_header == expected_key:
         return api_key_header
     raise HTTPException(status_code=403, detail="Could not validate credentials")
 

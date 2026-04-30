@@ -28,15 +28,22 @@ class ArgosMCPClient:
             return f"Error: MCP Server '{server_name}' not configured or not running."
             
         logger.info(f"Calling MCP Tool: {server_name}.{tool_name} with args {args}")
-        # Mock processing delay
-        await asyncio.sleep(1)
-        
-        # Simulated responses for the lab
-        if server_name == "kubescape" and tool_name == "scan_namespace":
-            return json.dumps({"status": "success", "findings": ["AutomountServiceAccountToken is true", "Missing NetworkPolicy"]})
-        elif server_name == "hexstrike" and tool_name == "nmap_scan":
-            return json.dumps({"status": "success", "open_ports": [80, 3000, 8080]})
+        try:
+            # Mock processing delay simulating network call
+            await asyncio.wait_for(asyncio.sleep(1), timeout=5.0)
             
-        return json.dumps({"status": "error", "message": f"Tool {tool_name} not implemented in mock."})
+            # Simulated responses for the lab
+            if server_name == "kubescape" and tool_name == "scan_namespace":
+                return json.dumps({"status": "success", "findings": ["AutomountServiceAccountToken is true", "Missing NetworkPolicy"]})
+            elif server_name == "hexstrike" and tool_name == "nmap_scan":
+                return json.dumps({"status": "success", "open_ports": [80, 3000, 8080]})
+                
+            return json.dumps({"status": "error", "message": f"Tool {tool_name} not implemented in mock."})
+        except asyncio.TimeoutError:
+            logger.error(f"MCP Tool {server_name}.{tool_name} timed out.")
+            return json.dumps({"status": "error", "message": "Connection to MCP server timed out."})
+        except Exception as e:
+            logger.error(f"MCP Execution failed: {str(e)}")
+            return json.dumps({"status": "error", "message": f"Internal execution failure: {str(e)}"})
 
 mcp_client = ArgosMCPClient("mcp-servers/mcp-config.json")

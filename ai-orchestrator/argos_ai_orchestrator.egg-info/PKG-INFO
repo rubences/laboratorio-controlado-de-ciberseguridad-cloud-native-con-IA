@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: argos-ai-orchestrator
+Version: 0.1.0
+Summary: AI-driven cloud-native security laboratory orchestrator
+Author: ARGOS Team
+Requires-Python: >=3.10
+Requires-Dist: fastapi>=0.103.1
+Requires-Dist: uvicorn>=0.23.2
+Requires-Dist: pydantic>=2.3.0
+Requires-Dist: langgraph>=0.0.26
+Requires-Dist: langchain>=0.1.0
+Requires-Dist: langchain-community>=0.0.13
+Requires-Dist: langchain-openai>=0.0.8
+Requires-Dist: mcp>=0.1.0
+Provides-Extra: dev
+Requires-Dist: ruff>=0.3.0; extra == "dev"
+Requires-Dist: bandit>=1.7.7; extra == "dev"
+Requires-Dist: mypy>=1.9.0; extra == "dev"
