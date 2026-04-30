@@ -3,6 +3,8 @@ services:
     build:
       context: ./caldera-src
       dockerfile: Dockerfile
+      args:
+        VARIANT: slim
     container_name: caldera_server
     restart: always
     ports:
