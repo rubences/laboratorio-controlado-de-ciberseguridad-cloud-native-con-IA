@@ -1,0 +1,31 @@
+# Valores de configuración para Falco vía Helm
+# falcosecurity/falco
+
+tty: true
+
+# Driver de recolección de eventos (ebpf es moderno y recomendado en K8s/Kind)
+driver:
+  kind: ebpf
+
+# Exponer métricas y webhooks si queremos integrarlo con Wazuh u otros
+falcosidekick:
+  enabled: true
+  webui:
+    enabled: true
+  config:
+    # Ejemplo: Si tuviéramos wazuh, podríamos enviar logs vía syslog o webhook
+    # webhook:
+    #   address: "http://wazuh-manager:1514"
+    syslog:
+      host: "wazuh.local"
+      port: 514
+      protocol: "udp"
+
+# Recursos
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1024Mi

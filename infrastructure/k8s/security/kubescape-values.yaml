@@ -1,0 +1,26 @@
+# Valores de configuración para Kubescape vía Helm
+# kubescape/kubescape-operator
+
+clusterName: "argos-lab"
+
+capabilities:
+  # Habilitamos escaneo continuo y postura de seguridad
+  configurationScan: enable
+  vulnerabilityScan: enable
+  runtimeObservability: enable
+  nodeScan: enable
+
+# Configuración de escaneo de vulnerabilidades
+vulnerabilities:
+  scanTimeout: "5m"
+  # Integración con el dashboard (requeriría token, lo omitimos para laboratorio local por ahora)
+  # submit: true
+
+nodeAgent:
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "100m"
+      memory: "256Mi"

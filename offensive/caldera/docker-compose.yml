@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  caldera:
+    image: mitre/caldera:5.0.0
+    container_name: caldera_server
+    restart: always
+    ports:
+      - "8888:8888" # Web UI
+      - "8443:8443" # HTTPS Web UI
+      - "7010:7010" # Agent communication
+      - "7011:7011" # Agent communication
+      - "7012:7012" # Agent communication
+    environment:
+      - CALDERA_API_KEY=argos_secret_key
+    volumes:
+      - caldera_data:/usr/src/app/data
+      - caldera_conf:/usr/src/app/conf
+      - caldera_plugins:/usr/src/app/plugins
+
+volumes:
+  caldera_data:
+  caldera_conf:
+  caldera_plugins:
