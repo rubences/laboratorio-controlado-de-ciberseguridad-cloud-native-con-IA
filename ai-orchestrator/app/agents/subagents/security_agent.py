@@ -3,7 +3,7 @@ from typing import TypedDict, Annotated
 import operator
 # from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
-from ..mcp_client import mcp_client
+from ...mcp_client import mcp_client
 
 logger = logging.getLogger("argos.subagent.security")
 
