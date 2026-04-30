@@ -1,0 +1,77 @@
+import logging
+from typing import TypedDict, Literal
+from langgraph.graph import StateGraph, START, END
+from .subagents.security_agent import build_security_subagent
+from ..mcp_client import mcp_client
+
+logger = logging.getLogger("argos.supervisor")
+
+class SupervisorState(TypedDict):
+    task: str
+    namespace: str
+    allowed_tools: list[str]
+    current_phase: str
+    subagent_findings: list[dict]
+    status: str
+
+async def planner_node(state: SupervisorState):
+    logger.info("Supervisor Planner delegating task...")
+    await mcp_client.initialize()
+    return {"current_phase": "reconnaissance"}
+
+async def delegate_to_security_agent(state: SupervisorState):
+    logger.info("Delegating to Security Subagent...")
+    subagent = build_security_subagent()
+    
+    # Llamada asíncrona al subgrafo
+    sub_state = await subagent.ainvoke({
+        "task": state["task"],
+        "target": state["namespace"],
+        "allowed_tools": state["allowed_tools"],
+        "messages": [],
+        "findings": []
+    })
+    
+    return {
+        "subagent_findings": sub_state.get("findings", []),
+        "current_phase": "reporting"
+    }
+
+async def soc_reporting_node(state: SupervisorState):
+    logger.info("SOC Reporting Agent generating final evidence...")
+    # Formatear para Wazuh/Elastic
+    if not state.get("subagent_findings"):
+        logger.warning("No findings reported by subagents.")
+    return {"status": "completed"}
+
+def build_supervisor_graph():
+    workflow = StateGraph(SupervisorState)
+    
+    workflow.add_node("planner", planner_node)
+    workflow.add_node("security_agent", delegate_to_security_agent)
+    workflow.add_node("soc_reporter", soc_reporting_node)
+    
+    workflow.add_edge(START, "planner")
+    workflow.add_edge("planner", "security_agent")
+    workflow.add_edge("security_agent", "soc_reporter")
+    workflow.add_edge("soc_reporter", END)
+    
+    return workflow.compile()
+
+async def run_supervisor_workflow(task: str, namespace: str, tools: list[str]) -> dict:
+    graph = build_supervisor_graph()
+    initial_state = SupervisorState(
+        task=task,
+        namespace=namespace,
+        allowed_tools=tools,
+        current_phase="init",
+        subagent_findings=[],
+        status="running"
+    )
+    
+    final_state = await graph.ainvoke(initial_state)
+    return {
+        "status": final_state.get("status"),
+        "total_findings": len(final_state.get("subagent_findings", [])),
+        "details": final_state.get("subagent_findings", [])
+    }

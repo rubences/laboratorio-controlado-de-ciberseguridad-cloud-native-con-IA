@@ -150,4 +150,3 @@ Esta decisión permite cubrir con coherencia:
 - **C-07**: exposición, misconfigurations, emulación adversaria y blast radius.
 - **C-08**: telemetría, correlación, triage, respuesta y operación tipo SOC.
 
-Además, ofrece valor de TFG al demostrar una arquitectura segura, trazable, explicable y evaluable bajo principios modernos de DevSecOps, XDR, MCP y agentes IA.

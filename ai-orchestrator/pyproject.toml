@@ -1,0 +1,35 @@
+[project]
+name = "argos-ai-orchestrator"
+version = "0.1.0"
+description = "AI-driven cloud-native security laboratory orchestrator"
+authors = [{ name = "ARGOS Team" }]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.103.1",
+    "uvicorn>=0.23.2",
+    "pydantic>=2.3.0",
+    "langgraph>=0.0.26",
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.13",
+    "langchain-openai>=0.0.8", # Para el soporte estándar de LLMs
+    "mcp-sdk>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.3.0",
+    "bandit>=1.7.7",
+    "mypy>=1.9.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I", "UP", "S"]
+ignore = ["S101", "B008"]
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true

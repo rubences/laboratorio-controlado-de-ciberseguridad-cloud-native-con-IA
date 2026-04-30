@@ -22,9 +22,18 @@ spec:
       labels:
         app: juice-shop
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
       - name: juice-shop
         image: bkimminich/juice-shop:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false # Juice shop writes to tmp
+          capabilities:
+            drop: ["ALL"]
         ports:
         - containerPort: 3000
         resources:
@@ -64,9 +73,17 @@ spec:
       labels:
         app: webgoat
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
       - name: webgoat
         image: webgoat/webgoat:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         ports:
         - containerPort: 8080
         env:
