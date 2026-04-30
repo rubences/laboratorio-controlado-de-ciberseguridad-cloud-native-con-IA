@@ -1,0 +1,5 @@
+{
+  "task_description": "Analizar vulnerabilidades criticas en el namespace vulnerable-apps",
+  "allowed_tools": ["kubescape"],
+  "target_namespace": "vulnerable-apps"
+}
