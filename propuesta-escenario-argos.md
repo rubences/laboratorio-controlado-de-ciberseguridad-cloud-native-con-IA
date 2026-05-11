@@ -75,6 +75,12 @@ La herramienta principal propuesta es **HexStrike AI** vía **MCP**, gobernada p
 - Seguridad de la propia IA (prompt injection, jailbreak, tool misuse, fuga de datos).
 - Extensión del escenario hacia “security for AI”.
 
+### 3.10 Foundation-Sec-8B-Reasoning (Motor de Razonamiento IA)
+
+- LLM especializado en ciberseguridad (basado en Llama 3.1 8B).
+- Desplegado localmente con Ollama (GGUF) para inferencia rápida y privada.
+- Utilizado por LangGraph para el razonamiento multi-paso (Chain-of-Thought) en la evaluación de vulnerabilidades y clasificación de hallazgos.
+
 ## 4. Arquitectura recomendada
 
 ```text
@@ -90,6 +96,7 @@ La herramienta principal propuesta es **HexStrike AI** vía **MCP**, gobernada p
                         │
 ┌───────────────────────▼──────────────────────────────────────┐
 │              LangGraph Multi-Agent Orchestrator               │
+│         (Motor: Foundation-Sec-8B-Reasoning / Ollama)         │
 │  Planner Agent | Security Agent | Evidence Agent | SOC Agent  │
 └───────────────┬─────────────┬─────────────┬──────────────────┘
                 │             │             │

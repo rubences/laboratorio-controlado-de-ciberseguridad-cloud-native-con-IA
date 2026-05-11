@@ -1,11 +1,13 @@
 import logging
 from typing import TypedDict, Annotated
 import operator
-# from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, START, END
 from ...mcp_client import mcp_client
 
 logger = logging.getLogger("argos.subagent.security")
+llm = ChatOllama(model="foundation-sec:latest", temperature=0.1)
 
 class SecuritySubagentState(TypedDict):
     task: str
@@ -20,15 +22,22 @@ async def tool_execution_node(state: SecuritySubagentState):
     """
     logger.info(f"SecuritySubagent executing on {state['target']}")
     
-    # In a real setup, an LLM decides WHICH tool to call based on `allowed_tools`.
-    # Here we mock the LLM decision and execute tools.
+    # We use Foundation-Sec-8B to decide on tool execution based on available tools.
+    prompt = f"""You are an advanced Security AI Subagent.
+Your target is {state['target']}.
+Available tools: {state['allowed_tools']}
+Given the context, what tools should we execute to perform reconnaissance? Respond with ONLY the names of the tools, comma separated."""
+    
+    response = await llm.ainvoke([HumanMessage(content=prompt)])
+    decision_text = response.content.lower()
+    
     new_findings = []
     
-    if "kubescape" in state["allowed_tools"]:
+    if "kubescape" in state["allowed_tools"] and "kubescape" in decision_text:
         result = await mcp_client.call_tool("kubescape", "scan_namespace", {"namespace": state["target"]})
         new_findings.append({"tool": "kubescape", "result": result})
         
-    if "nmap_safe" in state["allowed_tools"]:
+    if "nmap_safe" in state["allowed_tools"] and "nmap" in decision_text:
         result = await mcp_client.call_tool("hexstrike", "nmap_scan", {"target": state["target"]})
         new_findings.append({"tool": "nmap", "result": result})
 
@@ -42,8 +51,13 @@ async def evaluator_node(state: SecuritySubagentState):
     Subagent node that evaluates if the task is complete.
     """
     logger.info("SecuritySubagent evaluating results...")
+    
     if len(state["findings"]) > 0:
-        return {"messages": ["Evaluation complete. Anomalies detected."]}
+        eval_prompt = f"""You are a senior SOC analyst. Evaluate these findings and indicate if there are critical anomalies.
+Findings: {state["findings"]}"""
+        eval_response = await llm.ainvoke([SystemMessage(content="Be concise."), HumanMessage(content=eval_prompt)])
+        return {"messages": [eval_response.content]}
+        
     return {"messages": ["Evaluation complete. No anomalies."]}
 
 def build_security_subagent():

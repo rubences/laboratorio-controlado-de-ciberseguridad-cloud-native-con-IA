@@ -1,10 +1,13 @@
 import logging
 from typing import TypedDict, Literal
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, START, END
 from .subagents.security_agent import build_security_subagent
 from ..mcp_client import mcp_client
 
 logger = logging.getLogger("argos.supervisor")
+llm = ChatOllama(model="foundation-sec:latest", temperature=0.2)
 
 class SupervisorState(TypedDict):
     task: str
@@ -16,6 +19,14 @@ class SupervisorState(TypedDict):
 
 async def planner_node(state: SupervisorState):
     logger.info("Supervisor Planner delegating task...")
+    
+    prompt = f"""You are the Lead Security Planner. Task: {state['task']}
+Target Namespace: {state['namespace']}
+Plan the next phase."""
+    
+    response = await llm.ainvoke([SystemMessage(content="Be brief."), HumanMessage(content=prompt)])
+    logger.info(f"Planner Output: {response.content}")
+    
     await mcp_client.initialize()
     return {"current_phase": "reconnaissance"}
 
@@ -39,9 +50,17 @@ async def delegate_to_security_agent(state: SupervisorState):
 
 async def soc_reporting_node(state: SupervisorState):
     logger.info("SOC Reporting Agent generating final evidence...")
-    # Formatear para Wazuh/Elastic
+    
     if not state.get("subagent_findings"):
         logger.warning("No findings reported by subagents.")
+        return {"status": "completed"}
+        
+    prompt = f"""You are a SOC Reporter. Summarize these findings for a final report.
+Findings: {state['subagent_findings']}"""
+    
+    response = await llm.ainvoke([SystemMessage(content="Provide a structured summary."), HumanMessage(content=prompt)])
+    logger.info(f"SOC Report generated:\n{response.content}")
+    
     return {"status": "completed"}
 
 def build_supervisor_graph():
