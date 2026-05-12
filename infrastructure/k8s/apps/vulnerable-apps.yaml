@@ -21,6 +21,7 @@ spec:
     metadata:
       labels:
         app: juice-shop
+        fdtn.ai/runtime-observed: "true"
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -72,6 +73,7 @@ spec:
     metadata:
       labels:
         app: webgoat
+        fdtn.ai/runtime-observed: "true"
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -127,6 +129,7 @@ spec:
     metadata:
       labels:
         app: dvwa
+        fdtn.ai/runtime-observed: "true"
     spec:
       automountServiceAccountToken: false
       containers:

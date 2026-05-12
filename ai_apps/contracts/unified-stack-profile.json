@@ -1,0 +1,165 @@
+{
+  "profile_name": "controlled-cyber-lab-unified-stack",
+  "profile_version": "2026-05-12-bridge1",
+  "lab_mode": "hybrid-modern-plus-legacy",
+  "foundation_model": "hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning",
+  "api_contracts": {
+    "modern_scaffold": {
+      "entrypoint": "ai_apps.api.main:app",
+      "mode": "scaffold",
+      "status": "active",
+      "execution_modes_supported": [
+        "scaffold",
+        "legacy_bridge"
+      ],
+      "default_execution_mode": "scaffold",
+      "legacy_bridge": {
+        "path": "in_process",
+        "delegates_to": "ai-orchestrator/app/agents/supervisor.py:run_supervisor_workflow",
+        "status": "available-when-legacy-dependencies-are-installed",
+        "notes": [
+          "Bridge reuses the legacy workflow in-process instead of calling localhost HTTP when possible.",
+          "Legacy runtime remains experimental and still uses mocked MCP responses in several branches."
+        ]
+      },
+      "exposes": [
+        "GET /health",
+        "GET /api/v1/stack-overview",
+        "POST /api/v1/scans/start"
+      ]
+    },
+    "legacy_runtime": {
+      "entrypoint": "ai-orchestrator/app/main.py",
+      "mode": "experimental-legacy",
+      "status": "preserved-for-advanced-runtime",
+      "exposes": [
+        "GET /health",
+        "GET /api/v1/scope",
+        "POST /api/v1/analyze"
+      ]
+    }
+  },
+  "control_planes": [
+    {
+      "name": "ai_apps",
+      "role": "modern-api-scaffold",
+      "contract": "FastAPI base for safe scan intake, guardrails and evidence logging",
+      "implementation_state": "real-scaffold"
+    },
+    {
+      "name": "ai-orchestrator",
+      "role": "advanced-legacy-runtime",
+      "contract": "LangGraph-based experimental orchestrator kept as deeper runtime reference",
+      "implementation_state": "experimental-legacy"
+    }
+  ],
+  "platform_layers": [
+    {
+      "name": "k8s_platform",
+      "role": "modern-kubernetes-layout",
+      "scope": [
+        "sandbox",
+        "targets"
+      ],
+      "implementation_state": "scaffold-manifests"
+    },
+    {
+      "name": "infrastructure",
+      "role": "legacy-supporting-layer",
+      "scope": [
+        "kind bootstrap",
+        "legacy vulnerable apps",
+        "Wazuh docker-compose",
+        "runtime security helm values",
+        "network policies"
+      ],
+      "implementation_state": "mixed-real-and-legacy"
+    }
+  ],
+  "sandbox_components": [
+    {
+      "name": "mcp-server",
+      "namespace": "sandbox",
+      "mode": "scaffold",
+      "status": "mock-adapter"
+    },
+    {
+      "name": "burp-suite",
+      "namespace": "sandbox",
+      "mode": "scaffold",
+      "status": "mock-adapter"
+    },
+    {
+      "name": "neurosploit",
+      "namespace": "sandbox",
+      "mode": "scaffold",
+      "status": "mock-adapter"
+    }
+  ],
+  "targets": [
+    {
+      "name": "juiceshop",
+      "namespace": "targets",
+      "mode": "modern-scaffold-target"
+    },
+    {
+      "name": "dvwa",
+      "namespace": "targets",
+      "mode": "modern-scaffold-target"
+    },
+    {
+      "name": "juice-shop",
+      "namespace": "vulnerable-apps",
+      "mode": "legacy-target"
+    },
+    {
+      "name": "webgoat",
+      "namespace": "vulnerable-apps",
+      "mode": "legacy-target"
+    },
+    {
+      "name": "dvwa",
+      "namespace": "vulnerable-apps",
+      "mode": "legacy-target"
+    }
+  ],
+  "runtime_sensors": [
+    {
+      "name": "Falco",
+      "role": "runtime detection",
+      "deployment": "helm via infrastructure/k8s/security/falco-values.yaml",
+      "status": "deployable"
+    },
+    {
+      "name": "Kubescape",
+      "role": "posture and runtime posture correlation",
+      "deployment": "helm via infrastructure/k8s/security/kubescape-values.yaml",
+      "status": "deployable"
+    },
+    {
+      "name": "Tetragon",
+      "role": "eBPF runtime and process visibility",
+      "deployment": "helm plus lab base config in infrastructure/k8s/security",
+      "status": "base-integrated-not-presented-as-full-production-pipeline"
+    },
+    {
+      "name": "Wazuh",
+      "role": "SIEM/XDR style external telemetry aggregation",
+      "deployment": "docker-compose under infrastructure/wazuh",
+      "status": "out-of-cluster-supporting-layer"
+    }
+  ],
+  "integration_flow": [
+    "Operators can start with ai_apps as the modern intake API.",
+    "Requests can stay in scaffold mode or be delegated through an in-process legacy_bridge into ai-orchestrator for advanced multi-agent experimentation.",
+    "k8s_platform defines the modern sandbox and targets layout.",
+    "infrastructure keeps the bootstrap, legacy targets, Wazuh support and runtime security add-ons.",
+    "Falco, Kubescape and Tetragon are runtime/security sensors; Burp and NeuroSploit stay explicit mock adapters in the scaffold layer."
+  ],
+  "notes": [
+    "This profile is a technical/documentary contract, not a claim that every component is wired into a production-grade feedback loop.",
+    "Tetragon is integrated as runtime visibility foundation and deployment path, not as a fictional fully-closed response engine.",
+    "Foundation-Sec-8B is declared as the model reference across the unified scenario.",
+    "The legacy bridge is operational but intentionally honest about experimental runtime behavior and partial mocks."
+  ]
+}

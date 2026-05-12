@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tetragon
+  labels:
+    app.kubernetes.io/part-of: controlled-cyber-lab
+    fdtn.ai/security-sensor: tetragon
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tetragon-lab-profile
+  namespace: tetragon
+  labels:
+    app.kubernetes.io/name: tetragon
+    app.kubernetes.io/component: runtime-visibility
+    fdtn.ai/security-sensor: tetragon
+data:
+  mode: runtime-visibility
+  implementation_state: "base-integration"
+  observed_label_selector: "fdtn.ai/runtime-observed=true"
+  observed_namespaces: "sandbox,targets,vulnerable-apps"
+  description: >-
+    Tetragon se integra como sensor eBPF de visibilidad de procesos y runtime.
+    Este artefacto documenta el contrato del laboratorio y evita fingir una
+    canalización productiva completa si todavía no existe.

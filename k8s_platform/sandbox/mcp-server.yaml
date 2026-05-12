@@ -17,6 +17,7 @@ spec:
       labels:
         app.kubernetes.io/name: mcp-server
         fdtn.ai/scaffold: "true"
+        fdtn.ai/runtime-observed: "true"
     spec:
       automountServiceAccountToken: false
       containers:

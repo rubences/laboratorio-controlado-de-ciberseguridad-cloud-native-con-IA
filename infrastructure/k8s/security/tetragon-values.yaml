@@ -1,0 +1,4 @@
+tetragon:
+  prometheus:
+    enabled: true
+    metricsLabelFilter: "namespace,workload,binary"
