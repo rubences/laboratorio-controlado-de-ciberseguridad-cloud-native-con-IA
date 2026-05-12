@@ -7,7 +7,7 @@ from .subagents.security_agent import build_security_subagent
 from ..mcp_client import mcp_client
 
 logger = logging.getLogger("argos.supervisor")
-llm = ChatOllama(model="foundation-sec:latest", temperature=0.2)
+llm = ChatOllama(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.2)
 
 class SupervisorState(TypedDict):
     task: str

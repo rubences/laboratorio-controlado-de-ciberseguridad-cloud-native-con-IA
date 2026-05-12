@@ -7,7 +7,7 @@ from langgraph.graph import StateGraph, START, END
 from ...mcp_client import mcp_client
 
 logger = logging.getLogger("argos.subagent.security")
-llm = ChatOllama(model="foundation-sec:latest", temperature=0.1)
+llm = ChatOllama(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.1)
 
 class SecuritySubagentState(TypedDict):
     task: str
