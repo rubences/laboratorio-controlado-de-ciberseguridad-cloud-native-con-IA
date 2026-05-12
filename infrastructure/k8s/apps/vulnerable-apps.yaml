@@ -29,9 +29,19 @@ spec:
         runAsUser: 1000
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+      - name: prepare-juice-shop-csaf
+        image: bkimminich/juice-shop:v17.1.1
+        command:
+        - /bin/sh
+        - -c
+        - mkdir -p /juice-shop/.well-known && [ -f /juice-shop/.well-known/provider-metadata.json ] || printf '{}' > /juice-shop/.well-known/provider-metadata.json
+        volumeMounts:
+        - name: juice-shop-csaf
+          mountPath: /juice-shop/.well-known
       containers:
       - name: juice-shop
-        image: bkimminich/juice-shop:latest
+        image: bkimminich/juice-shop:v17.1.1
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false # Juice shop writes to tmp
