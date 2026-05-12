@@ -44,5 +44,27 @@ try {
     Write-Host "SAST Bandit: FAILED. Revisa las vulnerabilidades de Python detectadas." -ForegroundColor Red
 }
 
+Write-Host "`n[4/5] Ejecutando chequeo de tipos estático (MyPy)..." -ForegroundColor Yellow
+try {
+    mypy . --ignore-missing-imports
+    Write-Host "MyPy: PASSED" -ForegroundColor Green
+} catch {
+    Write-Host "MyPy: FAILED. Revisa los errores de tipado." -ForegroundColor Red
+}
+
+Pop-Location
+
+Write-Host "`n[5/5] Ejecutando pruebas de seguridad dinámica (Promptfoo)..." -ForegroundColor Yellow
+if (Get-Command npx -ErrorAction SilentlyContinue) {
+    try {
+        npx promptfoo test --config ai-security-testing/promptfoo.yaml
+        Write-Host "Promptfoo: PASSED" -ForegroundColor Green
+    } catch {
+        Write-Host "Promptfoo: FAILED. Revisa las violaciones de política detectadas." -ForegroundColor Red
+    }
+} else {
+    Write-Host "npx/node no encontrado. Saltando validación de Promptfoo." -ForegroundColor Gray
+}
+
 Pop-Location
 Write-Host "`nValidación completada." -ForegroundColor Cyan

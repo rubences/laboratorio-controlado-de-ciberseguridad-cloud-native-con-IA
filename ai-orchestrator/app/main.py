@@ -6,6 +6,7 @@ import uuid
 import logging
 import time
 import os
+import json
 import secrets
 from contextlib import asynccontextmanager
 from .agents.supervisor import run_supervisor_workflow
@@ -93,12 +94,25 @@ async def analyze_target(request: SecurityTaskRequest):
             tools=request.allowed_tools
         )
         exec_time = (time.time() - start_time) * 1000
-        return SecurityTaskResponse(
+        response = SecurityTaskResponse(
             correlation_id=correlation_id,
             status="success",
             execution_time_ms=exec_time,
             results=result
         )
+        
+        # Save evidence automatically
+        try:
+            evidence_dir = os.path.join(os.path.dirname(__file__), "..", "..", "evidence", "analyses")
+            os.makedirs(evidence_dir, exist_ok=True)
+            evidence_path = os.path.join(evidence_dir, f"analysis_{correlation_id}.json")
+            with open(evidence_path, "w") as f:
+                json.dump(response.model_dump(), f, indent=2)
+            logger.info(f"[{correlation_id}] Evidence saved to {evidence_path}")
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Failed to save evidence: {str(e)}")
+
+        return response
     except Exception as e:
         logger.error(f"[{correlation_id}] Workflow failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal workflow execution failed")
