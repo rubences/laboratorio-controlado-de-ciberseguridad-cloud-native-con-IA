@@ -11,7 +11,7 @@ dependencies = [
     "langgraph>=0.0.26",
     "langchain>=0.1.0",
     "langchain-community>=0.0.13",
-    "langchain-openai>=0.0.8", # Para el soporte estándar de LLMs
+    "langchain-ollama>=0.1.0", # Para el soporte estándar de LLMs locales
     "mcp>=0.1.0",
 ]
 

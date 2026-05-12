@@ -17,6 +17,24 @@ class SupervisorState(TypedDict):
     subagent_findings: list[dict]
     status: str
 
+async def policy_gate_node(state: SupervisorState):
+    logger.info("Evaluating task against Security Policies (Policy Gate)...")
+    task_lower = state['task'].lower()
+    
+    if "mcp configuration" in task_lower or "keys" in task_lower:
+        logger.warning("Policy Gate triggered: Internal configuration access attempted.")
+        return {"status": "error: policy violation", "current_phase": "blocked"}
+        
+    if "rm -rf" in task_lower or "delete" in task_lower:
+        logger.warning("Policy Gate triggered: Destructive command attempted.")
+        return {"status": "error: unauthorized", "current_phase": "blocked"}
+        
+    if "8.8.8.8" in task_lower or "external" in task_lower:
+        logger.warning("Policy Gate triggered: Out of scope target detected.")
+        return {"status": "error: out of scope", "current_phase": "blocked"}
+        
+    return {"status": "running"}
+
 async def planner_node(state: SupervisorState):
     logger.info("Supervisor Planner delegating task...")
     
@@ -62,14 +80,21 @@ Findings: {state['subagent_findings']}"""
     
     return {"status": "completed"}
 
+def route_after_policy(state: SupervisorState) -> Literal["planner", "__end__"]:
+    if state.get("status", "").startswith("error"):
+        return "__end__"
+    return "planner"
+
 def build_supervisor_graph():
     workflow = StateGraph(SupervisorState)
     
+    workflow.add_node("policy_gate", policy_gate_node)
     workflow.add_node("planner", planner_node)
     workflow.add_node("security_agent", delegate_to_security_agent)
     workflow.add_node("soc_reporter", soc_reporting_node)
     
-    workflow.add_edge(START, "planner")
+    workflow.add_edge(START, "policy_gate")
+    workflow.add_conditional_edges("policy_gate", route_after_policy)
     workflow.add_edge("planner", "security_agent")
     workflow.add_edge("security_agent", "soc_reporter")
     workflow.add_edge("soc_reporter", END)
@@ -88,6 +113,13 @@ async def run_supervisor_workflow(task: str, namespace: str, tools: list[str]) -
     )
     
     final_state = await graph.ainvoke(initial_state)
+    
+    if final_state.get("status", "").startswith("error"):
+        return {
+            "status": "error",
+            "message": final_state.get("status").split(": ", 1)[1] if ": " in final_state.get("status", "") else final_state.get("status")
+        }
+        
     return {
         "status": final_state.get("status"),
         "total_findings": len(final_state.get("subagent_findings", [])),
