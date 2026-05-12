@@ -27,6 +27,8 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: juice-shop
         image: bkimminich/juice-shop:latest
@@ -37,10 +39,16 @@ spec:
             drop: ["ALL"]
         ports:
         - containerPort: 3000
+        volumeMounts:
+        - name: juice-shop-csaf
+          mountPath: /juice-shop/.well-known
         resources:
           limits:
             memory: "512Mi"
             cpu: "500m"
+      volumes:
+      - name: juice-shop-csaf
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -64,6 +72,9 @@ metadata:
   namespace: vulnerable-apps
   labels:
     app: webgoat
+  annotations:
+    fdtn.ai/runtime-smoke-gate: "best-effort"
+    fdtn.ai/runtime-smoke-rationale: "Upstream image currently exits with 'Unable to access jarfile webgoat.jar'; until the repo vendors a verified offline-safe entrypoint, runtime smoke reports it as WARN instead of FAIL."
 spec:
   replicas: 1
   selector:

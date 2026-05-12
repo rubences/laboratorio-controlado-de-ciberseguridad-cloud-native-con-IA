@@ -24,6 +24,7 @@ spec:
         - name: burp-suite
           image: hashicorp/http-echo:1.0.0
           args:
+            - "-listen=:8080"
             - "-text=Burp mock adapter available"
           ports:
             - containerPort: 8080

@@ -113,6 +113,14 @@ graph TD
 7. `infrastructure/k8s/security/tetragon-runtime-observability.yaml`
 8. Helm opcional para **Kubescape**, **Falco** y **Tetragon**
 
+Si el clúster ya existe y solo querés reconciliar manifests/runtime, corré:
+
+```powershell
+./scripts/reconcile-k8s-lab.ps1
+```
+
+Ese script NO recrea Kind: re-aplica sandbox/targets/legacy + policies + Tetragon base y espera rollout de los deployments soportados.
+
 ### Endurecimiento práctico del bootstrap de ingress
 
 - `deploy-lab.ps1` dejó de depender por default del `main` remoto mutable de `ingress-nginx`.
@@ -314,6 +322,44 @@ Para no adivinar si el operador dejó algo a medias, el repo ahora trae smoke ch
 - **CALDERA**: compose, `.env` opcional, `docker compose config`, servicio/contenedor esperado, `8889`, GET HTTP básico en `8889` y reporte opcional de `8443`, `7010`, `7011/udp`, `7012`, `8853`.
 
 Los scripts emiten mensajes `OK`, `WARN` y `FAIL` diferenciando PRECHECK vs RUNTIME para que un stack apagado no rompa el flujo cuando solo querés validar bootstrap.
+
+## ☸️ Smoke checks Kubernetes del laboratorio unificado
+
+El repo ahora también trae smoke checks PowerShell para la capa Kubernetes. MISMA idea, pero aplicada al cluster/lab: precheck primero, runtime después, sin build y sin depender de internet.
+
+### Scripts
+
+```powershell
+./scripts/check-k8s-runtime-smoke.ps1
+./scripts/k8s-smoke-helpers.ps1
+```
+
+### Modos operativos
+
+- `-Mode Precheck`: valida manifests esperables del repo, `kubectl` y contexto si existe. Si el cluster está apagado, deja `WARN`, no rompe.
+- `-Mode Auto`: corre precheck y suma runtime checks solo si detecta cluster accesible.
+- `-Mode Runtime`: exige cluster accesible y revisa namespaces, deployments clave, ConfigMap base de Tetragon, network policies y releases Helm observables.
+
+### Ejemplos
+
+```powershell
+./scripts/check-k8s-runtime-smoke.ps1 -Mode Precheck
+./scripts/check-k8s-runtime-smoke.ps1 -Mode Auto
+./scripts/check-k8s-runtime-smoke.ps1 -Mode Runtime
+```
+
+### Cobertura
+
+- `kubectl` + `kubectl config current-context`
+- verificación best-effort del Kind esperado `argos-lab`
+- namespaces `ingress-nginx`, `sandbox`, `targets`, `vulnerable-apps`, `tetragon`
+- readiness de `ingress-nginx-controller`, sandbox moderno (`mcp-server`, `burp-suite`, `neurosploit`), targets modernos (`juiceshop`, `dvwa`) y targets legacy soportados (`juice-shop`, `dvwa`)
+- estado best-effort de `webgoat`: si la imagen upstream sigue saliendo con `Unable to access jarfile webgoat.jar`, se reporta `WARN` y no se finge soporte estable sin una imagen/entrypoint curado dentro del repo
+- ConfigMap `tetragon/tetragon-lab-profile`
+- releases Helm `kubescape`, `falco`, `tetragon` si Helm está disponible
+- network policies esperadas en `sandbox`, `targets` y `vulnerable-apps`
+
+La gracia es NO mentirse: si en `Auto` no hay cluster accesible, el script lo deja clarísimo con `WARN`; si corrés `Runtime`, ahí sí te exige el estado real del lab.
 
 ## 🔐 Hardening práctico del `ai-orchestrator`
 

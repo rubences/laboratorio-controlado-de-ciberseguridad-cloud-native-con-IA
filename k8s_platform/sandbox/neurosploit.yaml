@@ -24,6 +24,7 @@ spec:
         - name: neurosploit
           image: hashicorp/http-echo:1.0.0
           args:
+            - "-listen=:8090"
             - "-text=NeuroSploit mock adapter available"
           ports:
             - containerPort: 8090

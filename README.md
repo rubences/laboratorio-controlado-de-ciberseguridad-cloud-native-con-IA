@@ -227,6 +227,18 @@ Eso evita vender humo: si corrés `legacy_bridge`, los findings quedan marcados 
 7. aplica base config de **Tetragon**
 8. si existe Helm, instala **Kubescape + Falco + Tetragon**
 
+Si querés re-aplicar y esperar readiness del stack Kubernetes SIN recrear el clúster, usá:
+
+```powershell
+./scripts/reconcile-k8s-lab.ps1
+```
+
+Ese helper:
+
+- re-aplica `sandbox`, `targets`, `vulnerable-apps`, network policies y ConfigMap base de Tetragon
+- espera rollout exitoso de los deployments modernos y de los legacy que hoy sí están soportados (`juice-shop`, `dvwa`)
+- deja `webgoat` como **best-effort** mientras no exista en el repo una imagen/entrypoint verificado offline para su JAR
+
 ### Variables operativas útiles para `deploy-lab.ps1`
 
 - `ARGOS_INGRESS_NGINX_MANIFEST`: permite sobreescribir el manifest de ingress. Default: release pinneada `controller-v1.11.5` de `ingress-nginx` para Kind, en vez de `main` remoto mutable.
@@ -318,6 +330,48 @@ Se agregan smoke checks PowerShell SIN build y SIN depender de internet para val
 - si el stack está arriba: servicio/contenedor esperado + puerto local `8889`
 - si `8889` responde, intenta además un GET HTTP básico local
 - reporte opcional de `8443`, `7010`, `7011/udp`, `7012` y `8853`
+
+## Kubernetes smoke checks del laboratorio unificado
+
+Se agregan smoke checks PowerShell para Kubernetes SIN build y SIN depender de internet. La idea es la misma que con Docker: tener prechecks útiles antes del despliegue y runtime checks claros cuando el cluster está accesible.
+
+### Scripts disponibles
+
+- `./scripts/check-k8s-runtime-smoke.ps1`: wrapper principal del laboratorio Kubernetes.
+- `./scripts/k8s-smoke-helpers.ps1`: helpers reutilizables para precheck/runtime.
+
+### Modos
+
+- `Precheck`: valida `kubectl`, contexto si existe y manifests esperables del repo. NO falla porque el cluster esté apagado o inaccesible.
+- `Auto`: hace el precheck y, si detecta contexto/cluster accesible, suma runtime checks. Si no, deja `WARN` y sigue.
+- `Runtime`: exige cluster accesible y revisa namespaces, deployments, ConfigMap de Tetragon, network policies y releases Helm si Helm está disponible.
+
+### Ejemplos de uso
+
+```powershell
+./scripts/check-k8s-runtime-smoke.ps1 -Mode Precheck
+./scripts/check-k8s-runtime-smoke.ps1 -Mode Auto
+./scripts/check-k8s-runtime-smoke.ps1 -Mode Runtime
+./scripts/check-k8s-runtime-smoke.ps1 -Mode Runtime -ExpectedKindClusterName argos-lab
+```
+
+### Qué valida el smoke de Kubernetes
+
+- acceso a `kubectl` y `kubectl config current-context`
+- verificación best-effort del cluster Kind esperado `argos-lab`
+- manifests base del laboratorio (`kind-config`, sandbox, targets, vulnerable-apps, network policies, Tetragon)
+- namespaces `ingress-nginx`, `sandbox`, `targets`, `vulnerable-apps`, `tetragon`
+- readiness de deployments clave del escenario moderno y legacy:
+  - `ingress-nginx-controller`
+  - `mcp-server`, `burp-suite`, `neurosploit`
+  - `juiceshop`, `dvwa` en `targets`
+  - `juice-shop`, `dvwa` en `vulnerable-apps`
+- estado **best-effort** de `webgoat` en `vulnerable-apps`: si la imagen upstream sigue rompiendo con `Unable to access jarfile webgoat.jar`, el smoke lo reporta como `WARN` y no como `FAIL` hasta que exista un entrypoint verificado dentro del repo
+- existencia del ConfigMap `tetragon/tetragon-lab-profile`
+- si Helm está disponible: reporte de releases `kubescape`, `falco`, `tetragon`
+- network policies esperadas en `sandbox`, `targets` y `vulnerable-apps`
+
+La salida mantiene el mismo contrato visual: `OK`, `WARN` y `FAIL`, pensado para uso manual y para pipelines livianos de validación.
 
 ### Wazuh
 

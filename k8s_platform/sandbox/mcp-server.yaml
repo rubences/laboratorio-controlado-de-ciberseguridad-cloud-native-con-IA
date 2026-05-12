@@ -24,6 +24,7 @@ spec:
         - name: mcp-server
           image: hashicorp/http-echo:1.0.0
           args:
+            - "-listen=:5678"
             - "-text=MCP scaffold adapter ready"
           ports:
             - containerPort: 5678
