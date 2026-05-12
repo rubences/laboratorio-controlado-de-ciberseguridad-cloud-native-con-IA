@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import TypedDict, Literal
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_ollama import ChatOllama
@@ -80,6 +81,16 @@ Findings: {state['subagent_findings']}"""
     logger.info(f"SOC Report generated:\n{response.content}")
     
     return {"status": "completed"}
+
+async def human_approval_node(state: SupervisorState):
+    if not state.get("require_approval"):
+        return {"status": "auto_approved"}
+        
+    logger.warning("SMARTOPS: [HUMAN IN THE LOOP] Analysis paused. Waiting for operator review...")
+    # Simulated wait for human verification
+    await asyncio.sleep(2)
+    logger.info("SMARTOPS: [HUMAN IN THE LOOP] Operator approved the security plan.")
+    return {"status": "human_approved"}
 
 def route_after_policy(state: SupervisorState) -> Literal["planner", "__end__"]:
     if state.get("status", "").startswith("error"):

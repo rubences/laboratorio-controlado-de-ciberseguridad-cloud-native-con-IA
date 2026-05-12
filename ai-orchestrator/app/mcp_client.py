@@ -39,7 +39,17 @@ class ArgosMCPClient:
             elif server_name == "hexstrike" and tool_name == "nmap_scan":
                 return json.dumps({"status": "success", "open_ports": [80, 3000, 8080]})
             elif server_name == "burp" and tool_name == "active_scan":
-                return json.dumps({"status": "success", "vulnerabilities": ["XSS on /search", "Cleartext password transmission"]})
+                # Detailed Working Example: Juice Shop HTTP Mapping
+                observation = {
+                    "status": "success",
+                    "routes": ["/", "/login", "/api/products"],
+                    "evidence": {
+                        "login_form": '<form action="/login" method="post"><input name="email" /><input name="password" /></form>',
+                        "products_api": "/api/products"
+                    },
+                    "description": "Initial web mapping completed using Burp Suite MCP."
+                }
+                return json.dumps(observation)
             elif server_name == "neurosploit" and tool_name == "msf_execute":
                 return json.dumps({"status": "success", "exploit_status": "session_opened", "target": args.get("target")})
             elif server_name == "neurosploit" and tool_name == "verify_finding":

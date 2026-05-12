@@ -85,16 +85,28 @@ async def anti_hallucination_node(state: SecuritySubagentState):
 async def evaluator_node(state: SecuritySubagentState):
     """
     Subagent node that evaluates if the task is complete.
+    Structures output into Task Answer and Subtask Answers.
     """
-    logger.info("SecuritySubagent evaluating results...")
+    logger.info("HexStrike SecuritySubagent evaluating results...")
     
     if len(state["findings"]) > 0:
-        eval_prompt = f"""You are a senior SOC analyst. Evaluate these findings and indicate if there are critical anomalies.
+        eval_prompt = f"""You are a HexStrike Security Evaluator. Based on the findings, answer the following subtasks:
+1. Which endpoint exposes login?
+2. Which route returns products?
+3. What evidence was recorded?
+
+Format your response as:
+TASK ANSWER: [Summary]
+SUBTASK ANSWERS:
+- Login: [Answer]
+- Products: [Answer]
+- Evidence: [Answer]
+
 Findings: {state["findings"]}"""
-        eval_response = await llm.ainvoke([SystemMessage(content="Be concise."), HumanMessage(content=eval_prompt)])
+        eval_response = await llm.ainvoke([SystemMessage(content="Be precise and follow the format."), HumanMessage(content=eval_prompt)])
         return {"messages": [eval_response.content]}
         
-    return {"messages": ["Evaluation complete. No anomalies."]}
+    return {"messages": ["Evaluation complete. No findings to analyze."]}
 
 def build_security_subagent():
     graph = StateGraph(SecuritySubagentState)
