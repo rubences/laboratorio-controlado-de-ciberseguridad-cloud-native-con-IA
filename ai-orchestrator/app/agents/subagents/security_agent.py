@@ -6,7 +6,7 @@ from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, START, END
 from ...mcp_client import mcp_client
 
-logger = logging.getLogger("argos.subagent.security")
+logger = logging.getLogger("hexstrike.subagent.security")
 llm = ChatOllama(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.1)
 
 class SecuritySubagentState(TypedDict):
@@ -15,18 +15,18 @@ class SecuritySubagentState(TypedDict):
     allowed_tools: list[str]
     messages: Annotated[list[str], operator.add]
     findings: Annotated[list[dict], operator.add]
+    raw_results: Annotated[list[dict], operator.add]
 
 async def tool_execution_node(state: SecuritySubagentState):
     """
     Subagent node that actively calls tools via MCP.
     """
-    logger.info(f"SecuritySubagent executing on {state['target']}")
+    logger.info(f"HexStrike SecuritySubagent executing on {state['target']}")
     
-    # We use Foundation-Sec-8B to decide on tool execution based on available tools.
-    prompt = f"""You are an advanced Security AI Subagent.
-Your target is {state['target']}.
-Available tools: {state['allowed_tools']}
-Given the context, what tools should we execute to perform reconnaissance? Respond with ONLY the names of the tools, comma separated."""
+    prompt = f"""You are the HexStrike Autonomous Pentesting Agent.
+Target: {state['target']}
+Available toolkit: {state['allowed_tools']}
+Decide which tools to use (nmap, kubescape, burp, neurosploit). Respond with ONLY the names of the tools, comma separated."""
     
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     decision_text = response.content.lower()
@@ -44,9 +44,42 @@ Given the context, what tools should we execute to perform reconnaissance? Respo
         result = await mcp_client.call_tool("hexstrike", "nmap_scan", {"target": safe_target})
         new_findings.append({"tool": "nmap", "result": result})
 
+    if "burp" in state["allowed_tools"] and ("burp" in decision_text or "web" in decision_text):
+        result = await mcp_client.call_tool("burp", "active_scan", {"target": state["target"]})
+        new_findings.append({"tool": "burp_suite", "result": result})
+
+    if "neurosploit" in state["allowed_tools"] and ("neuro" in decision_text or "exploit" in decision_text):
+        result = await mcp_client.call_tool("neurosploit", "msf_execute", {"target": safe_target})
+        new_findings.append({"tool": "neurosploit_v3", "result": result})
+
     return {
         "messages": ["Tools executed successfully."],
-        "findings": new_findings
+        "raw_results": new_findings
+    }
+
+async def anti_hallucination_node(state: SecuritySubagentState):
+    """
+    NeuroSploit V3 Pipeline: Verifies findings to prevent LLM hallucinations.
+    """
+    logger.info("NeuroSploit V3: Running Anti-Hallucination Cross-Check...")
+    if not state["raw_results"]:
+        return {"messages": ["No raw results to verify."]}
+        
+    verified = []
+    import json
+    for res in state["raw_results"]:
+        # Logic: NeuroSploit performs a second validation of the finding.
+        check = await mcp_client.call_tool("neurosploit", "verify_finding", {"finding": res})
+        check_data = json.loads(check)
+        if check_data.get("verified"):
+            verified.append({**res, "confidence": check_data.get("confidence"), "verified": True})
+            logger.info(f"Finding from {res['tool']} VERIFIED by NeuroSploit V3.")
+        else:
+            logger.warning(f"Finding from {res['tool']} REJECTED by NeuroSploit V3 (Possible Hallucination).")
+
+    return {
+        "findings": verified,
+        "messages": [f"NeuroSploit V3 verified {len(verified)} findings."]
     }
 
 async def evaluator_node(state: SecuritySubagentState):
@@ -66,10 +99,12 @@ Findings: {state["findings"]}"""
 def build_security_subagent():
     graph = StateGraph(SecuritySubagentState)
     graph.add_node("execute_tools", tool_execution_node)
+    graph.add_node("verify", anti_hallucination_node)
     graph.add_node("evaluate", evaluator_node)
     
     graph.add_edge(START, "execute_tools")
-    graph.add_edge("execute_tools", "evaluate")
+    graph.add_edge("execute_tools", "verify")
+    graph.add_edge("verify", "evaluate")
     graph.add_edge("evaluate", END)
     
     return graph.compile()

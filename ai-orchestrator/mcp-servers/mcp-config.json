@@ -11,6 +11,14 @@
     "hexstrike": {
       "command": "python",
       "args": ["-m", "hexstrike.mcp.server", "--config", "config.yaml"]
+    },
+    "burp": {
+      "command": "python",
+      "args": ["-m", "burp_mcp.server"]
+    },
+    "neurosploit": {
+      "command": "python",
+      "args": ["-m", "neurosploit.adapter", "--version", "v3"]
     }
   }
 }

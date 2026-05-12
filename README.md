@@ -8,31 +8,38 @@
 ## Estructura base del proyecto
 
 - `infrastructure/`: manifiestos Kubernetes (K8s), configuración de Wazuh y políticas.
-- `ai-orchestrator/`: API FastAPI principal, Orquestador multi-agente LangGraph (Policy Gate, Planner, Security, SOC).
+- `ai-orchestrator/`: API FastAPI principal, **HexStrike AI Orchestrator** con LangGraph.
 - `ai-security-testing/`: Entorno de evaluación (promptfoo) de inyecciones y out-of-scope.
 - `offensive/`: Configuración y despliegue de plataformas de emulación (CALDERA).
 - `evidence/`: almacenamiento de evidencias auditables.
 - `scripts/`: utilidades de despliegue y ejecución local.
 
-## Arquitectura del Orquestador
+## Arquitectura HexStrike AI
 
 ```mermaid
 graph TD
-    User([Usuario / CI]) -->|POST /api/v1/analyze| API[FastAPI Gateway]
-    API -->|Valida API Key| LG[LangGraph Orchestrator]
+    User([Usuario / CI]) -->|POST /api/v1/analyze| API[HexStrike Gateway]
+    API -->|Valida API Key| LG[LangGraph Governor]
     
-    subgraph LangGraph Orchestrator
+    subgraph HexStrike AI Orchestrator
         START --> PG[Policy Gate Node]
-        PG -- "Ataque / Out-of-Scope" --> END
         PG -- "Lícito" --> P[Planner Node]
         P --> SA[Security Agent Node]
-        SA --> SOC[SOC Reporter Node]
+        
+        subgraph Security Agent Loop
+            SA --> EXE[Execute Tools: Burp, NeuroSploit, Kubescape]
+            EXE --> AH[Anti-Hallucination Pipeline: NeuroSploit V3]
+            AH --> EVAL[Evaluator Node]
+        end
+        
+        EVAL --> SOC[SOC Reporter Node]
         SOC --> END
     end
 
-    SA -->|LLM Tool Calling| MCP[MCP Client]
-    MCP -.->|nmap, kubescape| Tools[Herramientas de Ciberseguridad]
-    Tools -.-> K8s[Clúster Kubernetes / Apps Vulnerables]
+    EXE -->|MCP| Servers[MCP Servers Hub]
+    Servers -.->|DAST| Burp[Burp Suite MCP]
+    Servers -.->|Exploit| NS[NeuroSploit V3 / Kali]
+    Servers -.->|Audit| KS[Kubescape MCP]
 ```
 
 ## Ejecución rápida de la API

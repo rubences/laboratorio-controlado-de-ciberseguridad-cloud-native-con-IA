@@ -14,7 +14,7 @@ from .mcp_client import mcp_client
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
-logger = logging.getLogger("argos.api")
+logger = logging.getLogger("hexstrike.api")
 
 API_KEY_NAME = "X-ARGOS-API-KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -37,9 +37,9 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="ARGOS AI Orchestrator API",
-    description="Secured API gateway for the AI-driven cloud-native security laboratory",
-    version="2.0.0",
+    title="HexStrike AI Orchestrator",
+    description="Motor de orquestación autónoma de ciberseguridad para el laboratorio ARGOS.",
+    version="1.0.0",
     lifespan=lifespan
 )
 
@@ -52,9 +52,10 @@ app.add_middleware(
 )
 
 class SecurityTaskRequest(BaseModel):
-    task_description: str = Field(..., max_length=500, description="The security task to perform")
-    target_namespace: str = Field(default="vulnerable-apps", pattern="^[a-z0-9-]+$")
-    allowed_tools: list[str] = Field(default=["kubescape", "trivy"])
+    task_description: str
+    target_namespace: str
+    allowed_tools: List[str]
+    require_approval: Optional[bool] = False
 
 class SecurityTaskResponse(BaseModel):
     correlation_id: str
@@ -87,11 +88,12 @@ async def analyze_target(request: SecurityTaskRequest):
     logger.info(f"[{correlation_id}] Starting task: {request.task_description} on {request.target_namespace}")
     start_time = time.time()
     try:
-        # Invoking the LangGraph Supervisor
+        # SmartOps Integration: Handover to LangGraph Governor
         result = await run_supervisor_workflow(
             task=request.task_description,
             namespace=request.target_namespace,
-            tools=request.allowed_tools
+            tools=request.allowed_tools,
+            require_approval=request.require_approval
         )
         exec_time = (time.time() - start_time) * 1000
         response = SecurityTaskResponse(

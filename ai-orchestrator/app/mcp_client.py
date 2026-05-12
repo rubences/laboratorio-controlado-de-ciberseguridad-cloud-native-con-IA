@@ -4,7 +4,7 @@ import logging
 import asyncio
 from typing import Any, Dict, List
 
-logger = logging.getLogger("argos.mcp")
+logger = logging.getLogger("hexstrike.mcp")
 
 class ArgosMCPClient:
     """
@@ -38,6 +38,13 @@ class ArgosMCPClient:
                 return json.dumps({"status": "success", "findings": ["AutomountServiceAccountToken is true", "Missing NetworkPolicy"]})
             elif server_name == "hexstrike" and tool_name == "nmap_scan":
                 return json.dumps({"status": "success", "open_ports": [80, 3000, 8080]})
+            elif server_name == "burp" and tool_name == "active_scan":
+                return json.dumps({"status": "success", "vulnerabilities": ["XSS on /search", "Cleartext password transmission"]})
+            elif server_name == "neurosploit" and tool_name == "msf_execute":
+                return json.dumps({"status": "success", "exploit_status": "session_opened", "target": args.get("target")})
+            elif server_name == "neurosploit" and tool_name == "verify_finding":
+                # Anti-Hallucination Pipeline response
+                return json.dumps({"status": "success", "confidence": 0.95, "verified": True})
                 
             return json.dumps({"status": "error", "message": f"Tool {tool_name} not implemented in mock."})
         except asyncio.TimeoutError:

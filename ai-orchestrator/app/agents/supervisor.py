@@ -6,7 +6,7 @@ from langgraph.graph import StateGraph, START, END
 from .subagents.security_agent import build_security_subagent
 from ..mcp_client import mcp_client
 
-logger = logging.getLogger("argos.supervisor")
+logger = logging.getLogger("hexstrike.supervisor")
 llm = ChatOllama(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.2)
 
 class SupervisorState(TypedDict):
@@ -16,6 +16,7 @@ class SupervisorState(TypedDict):
     current_phase: str
     subagent_findings: list[dict]
     status: str
+    require_approval: bool
 
 async def policy_gate_node(state: SupervisorState):
     logger.info("Evaluating task against Security Policies (Policy Gate)...")
@@ -38,9 +39,9 @@ async def policy_gate_node(state: SupervisorState):
 async def planner_node(state: SupervisorState):
     logger.info("Supervisor Planner delegating task...")
     
-    prompt = f"""You are the Lead Security Planner. Task: {state['task']}
+    prompt = f"""You are the HexStrike Master Security Planner. Task: {state['task']}
 Target Namespace: {state['namespace']}
-Plan the next phase."""
+Design a comprehensive offensive and defensive evaluation plan."""
     
     response = await llm.ainvoke([SystemMessage(content="Be brief."), HumanMessage(content=prompt)])
     logger.info(f"Planner Output: {response.content}")
@@ -91,17 +92,19 @@ def build_supervisor_graph():
     workflow.add_node("policy_gate", policy_gate_node)
     workflow.add_node("planner", planner_node)
     workflow.add_node("security_agent", delegate_to_security_agent)
+    workflow.add_node("human_approval", human_approval_node)
     workflow.add_node("soc_reporter", soc_reporting_node)
     
     workflow.add_edge(START, "policy_gate")
     workflow.add_conditional_edges("policy_gate", route_after_policy)
     workflow.add_edge("planner", "security_agent")
-    workflow.add_edge("security_agent", "soc_reporter")
+    workflow.add_edge("security_agent", "human_approval")
+    workflow.add_edge("human_approval", "soc_reporter")
     workflow.add_edge("soc_reporter", END)
     
     return workflow.compile()
 
-async def run_supervisor_workflow(task: str, namespace: str, tools: list[str]) -> dict:
+async def run_supervisor_workflow(task: str, namespace: str, tools: list[str], require_approval: bool = False) -> dict:
     graph = build_supervisor_graph()
     initial_state = SupervisorState(
         task=task,
@@ -109,7 +112,8 @@ async def run_supervisor_workflow(task: str, namespace: str, tools: list[str]) -
         allowed_tools=tools,
         current_phase="init",
         subagent_findings=[],
-        status="running"
+        status="running",
+        require_approval=require_approval
     )
     
     final_state = await graph.ainvoke(initial_state)
