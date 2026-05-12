@@ -102,3 +102,10 @@ async def analyze_target(request: SecurityTaskRequest):
     except Exception as e:
         logger.error(f"[{correlation_id}] Workflow failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal workflow execution failed")
+
+@app.get("/api/v1/scope", dependencies=[Depends(get_api_key)])
+def scope() -> dict[str, list[str]]:
+    return {
+        "allowed_targets": ["*.lab.local", "10.0.0.0/24", "vulnerable-apps"],
+        "blocked_targets": ["0.0.0.0/0", "*.prod.*"],
+    }
