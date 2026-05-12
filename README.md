@@ -4,6 +4,7 @@
 
 - Ver `propuesta-escenario-argos.md` para la propuesta completa del laboratorio.
 - Ver `docs/architecture/decision_tecnica.md` para la revisión de decisiones de arquitectura.
+- **Ver [WALKTHROUGH.md](WALKTHROUGH.md) para la guía detallada de hardening y operación.**
 
 ## Estructura base del proyecto
 

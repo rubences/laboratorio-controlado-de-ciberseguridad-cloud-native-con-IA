@@ -54,8 +54,8 @@ app.add_middleware(
 class SecurityTaskRequest(BaseModel):
     task_description: str
     target_namespace: str
-    allowed_tools: List[str]
-    require_approval: Optional[bool] = False
+    allowed_tools: list[str]
+    require_approval: bool = False
 
 class SecurityTaskResponse(BaseModel):
     correlation_id: str
