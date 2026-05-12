@@ -15,7 +15,9 @@ venv/
 *.jks
 certs/
 generated-certs/
-**/wazuh_indexer_ssl_certs/
+**/wazuh_indexer_ssl_certs/*
+!**/wazuh_indexer_ssl_certs/README.md
+!**/wazuh_indexer_ssl_certs/.gitkeep
 !**/*example*.pem
 !**/*example*.key
 !**/*template*.pem

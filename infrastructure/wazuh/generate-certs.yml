@@ -1,4 +1,7 @@
 # Wazuh Single-Node - Certificate Generator
+# Generates LOCAL-ONLY cert material in ./config/wazuh_indexer_ssl_certs/.
+# Run this BEFORE `docker compose -f docker-compose.yml up -d` and whenever
+# you need a full certificate re-issuance/rotation for this lab stack.
 # Run: docker compose -f generate-certs.yml run --rm generator
 services:
   generator:

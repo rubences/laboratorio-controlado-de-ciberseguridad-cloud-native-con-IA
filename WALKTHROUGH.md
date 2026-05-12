@@ -185,9 +185,16 @@ PERO no se presenta falsamente como una tubería productiva completa de respuest
    - `INDEXER_PASSWORD`
    - `API_PASSWORD`
    - `DASHBOARD_PASSWORD`
-3. Copiá `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml.example` a `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml`.
-4. Reemplazá `__SET_WAZUH_API_PASSWORD__` por el mismo valor que `API_PASSWORD`.
-5. Recién ahí levantá el stack:
+3. Si necesitás cambiar nombres/IPs para SANs, editá `infrastructure/wazuh/config/certs.yml` ANTES de generar.
+4. Regenerá certificados localmente:
+
+```powershell
+docker compose -f infrastructure/wazuh/generate-certs.yml run --rm generator
+```
+
+5. Copiá `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml.example` a `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml`.
+6. Reemplazá `__SET_WAZUH_API_PASSWORD__` por el mismo valor que `API_PASSWORD`.
+7. Recién ahí levantá el stack:
 
 ```powershell
 docker compose -f infrastructure/wazuh/docker-compose.yml up -d
@@ -199,6 +206,15 @@ docker compose -f infrastructure/wazuh/docker-compose.yml up -d
 - los puertos de ingesta (`1514`, `1515`, `514/udp`) siguen abiertos por default para no romper el laboratorio, pero ahora son configurables por `*_BIND_IP`
 - Docker Compose exige secretos explícitos y ya NO cae en credenciales débiles por fallback
 - `wazuh.yml` dejó de tener YAML duplicado/ambiguo y pasó a ser plantilla saneada
+- los PEM/KEY reales salen del control de versiones y pasan a regenerarse localmente
+
+### Rotación recomendada de Wazuh
+
+1. `docker compose -f infrastructure/wazuh/docker-compose.yml down`
+2. borrar localmente los PEM/KEY generados en `infrastructure/wazuh/config/wazuh_indexer_ssl_certs/`
+3. volver a correr `generate-certs.yml`
+4. levantar el stack otra vez
+5. si necesitás una reemisión limpia de CA + estado, recreá manualmente los volúmenes persistentes antes del siguiente `up`
 
 ## 🔐 Bootstrap seguro de CALDERA
 
@@ -212,7 +228,8 @@ docker compose -f offensive/caldera/docker-compose.yml up -d
 3. En el primer arranque normal, CALDERA genera `conf/local.yml` con secretos aleatorios y los persiste en el volumen `caldera_conf`.
 4. Guardá las credenciales/API keys mostradas en logs del primer bootstrap.
 5. Evitá `--insecure`; si lo usás, `conf/default.yml` ya NO contiene secretos reales y requiere reemplazo manual de placeholders.
-6. Si ya existía `caldera_conf`, eliminá/regenerá ese volumen para descartar secretos heredados.
+6. Si configurás un certificado HTTPS propio, mantenelo como artefacto local/no versionado en `conf/local.yml` o en un volumen persistente.
+7. Si ya existía `caldera_conf`, eliminá/regenerá ese volumen para descartar secretos heredados.
 
 ### Hardening aplicado en CALDERA
 
@@ -225,7 +242,7 @@ docker compose -f offensive/caldera/docker-compose.yml up -d
 ## ⚠️ Limitaciones y mitigaciones
 
 - Esto NO rota secretos históricos ni limpia el historial git previo.
-- Si los certificados de Wazuh ya fueron compartidos fuera del repo, hay que regenerarlos aparte.
+- Si los certificados de Wazuh ya fueron compartidos fuera del repo, hay que regenerarlos localmente y evaluar recreación de volúmenes/estado antes de volver a confiar en el stack.
 - CALDERA sigue permitiendo modos inseguros upstream (`--insecure`); la mitigación en este repo es dejar esa vía SIN secretos reales preconfigurados y documentarla como excepción.
 - Un volumen `caldera_conf` viejo puede seguir reteniendo credenciales previas hasta que el operador lo recree.
 

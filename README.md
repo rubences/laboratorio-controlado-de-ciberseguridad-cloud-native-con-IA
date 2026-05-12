@@ -262,9 +262,17 @@ Se endureció `.gitignore` para reducir riesgo de trackear material criptográfi
 
 1. Copiá `infrastructure/wazuh/.env.example` a `infrastructure/wazuh/.env`.
 2. Completá `INDEXER_PASSWORD`, `API_PASSWORD` y `DASHBOARD_PASSWORD` con secretos fuertes.
-3. Copiá `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml.example` a `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml`.
-4. Reemplazá `__SET_WAZUH_API_PASSWORD__` por el mismo valor que uses en `API_PASSWORD`.
-5. Si necesitás exponer más que localhost, cambiá los `*_BIND_IP` en `infrastructure/wazuh/.env` de forma EXPLÍCITA.
+3. Si tu topología local cambia, ajustá `infrastructure/wazuh/config/certs.yml` ANTES de regenerar certificados.
+4. Regenerá el material TLS localmente:
+
+```powershell
+docker compose -f infrastructure/wazuh/generate-certs.yml run --rm generator
+```
+
+5. Copiá `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml.example` a `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml`.
+6. Reemplazá `__SET_WAZUH_API_PASSWORD__` por el mismo valor que uses en `API_PASSWORD`.
+7. Si necesitás exponer más que localhost, cambiá los `*_BIND_IP` en `infrastructure/wazuh/.env` de forma EXPLÍCITA.
+8. Recién ahí levantá el stack Wazuh con `docker compose -f infrastructure/wazuh/docker-compose.yml up -d`.
 
 Hardening aplicado:
 
@@ -272,6 +280,15 @@ Hardening aplicado:
 - `9200`, `55000` y `8444` quedan atados a loopback por default
 - el dashboard monta `wazuh.local.yml` en vez de un archivo trackeado con secreto duro
 - si faltan secretos, Docker Compose falla temprano en vez de arrancar con credenciales débiles
+- los PEM/KEY del indexer/manager/dashboard dejan de versionarse y pasan a ser artefactos locales regenerables
+
+Rotación recomendada de Wazuh:
+
+1. `docker compose -f infrastructure/wazuh/docker-compose.yml down`
+2. eliminar localmente los PEM/KEY existentes dentro de `infrastructure/wazuh/config/wazuh_indexer_ssl_certs/`
+3. regenerar con `generate-certs.yml`
+4. volver a levantar el stack
+5. si buscás un bootstrap realmente limpio de CA/estado, recrear manualmente los volúmenes de Wazuh antes de levantar otra vez
 
 ### CALDERA
 
@@ -279,7 +296,8 @@ Hardening aplicado:
 2. Levantá CALDERA con su compose. El primer arranque normal genera `offensive/caldera/caldera-src/conf/local.yml` con secretos aleatorios dentro del volumen persistente `caldera_conf`.
 3. Guardá las credenciales/API keys que CALDERA muestra en logs al crear `local.yml`.
 4. NO uses `--insecure` salvo para debugging aislado y efímero.
-5. Si ya venías usando CALDERA con un volumen previo, regenerá `caldera_conf` manualmente si querés descartar secretos viejos.
+5. Si activás certificados HTTPS propios para CALDERA, mantenelos como material LOCAL/NO versionado dentro de `conf/local.yml` o en un volumen, nunca en el repo.
+6. Si ya venías usando CALDERA con un volumen previo, regenerá `caldera_conf` manualmente si querés descartar secretos viejos.
 
 Hardening aplicado:
 
@@ -291,6 +309,6 @@ Hardening aplicado:
 ## Limitaciones honestas
 
 - Este cambio NO limpia el historial git previo ni rota secretos ya expuestos fuera del repo.
-- Los certificados PEM/KEY existentes de Wazuh siguen siendo material sensible operativo si fueron generados con valor real; `.gitignore` evita nuevos trackeos, pero no despublica lo anterior.
+- La rotación real sigue siendo una tarea OPERATIVA manual: hay que regenerar localmente los certs de Wazuh y, si corresponde, recrear volúmenes/estado persistente antes de confiar en el entorno renovado.
 - Algunos canales opcionales de CALDERA (FTP/SSH tunnel) quedan con placeholders en `default.yml`; si se usan, el operador debe completarlos en `conf/local.yml`.
 - Si existe un volumen `caldera_conf` previo al saneamiento, puede seguir conteniendo secretos históricos hasta que el operador lo regenere.

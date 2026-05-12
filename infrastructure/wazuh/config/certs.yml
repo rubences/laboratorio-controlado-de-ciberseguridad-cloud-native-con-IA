@@ -1,4 +1,6 @@
 nodes:
+  # Edit names/IPs here BEFORE generating if your local topology changes.
+  # This file is safe to version: it defines topology/SAN targets, not secrets.
   # Wazuh indexer server nodes
   indexer:
     - name: wazuh.indexer
