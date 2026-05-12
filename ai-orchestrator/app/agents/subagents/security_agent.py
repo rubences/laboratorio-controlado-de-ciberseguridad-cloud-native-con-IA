@@ -33,12 +33,15 @@ Given the context, what tools should we execute to perform reconnaissance? Respo
     
     new_findings = []
     
+    import re
+    safe_target = re.sub(r'[^a-zA-Z0-9-]', '', state['target'])
+    
     if "kubescape" in state["allowed_tools"] and "kubescape" in decision_text:
-        result = await mcp_client.call_tool("kubescape", "scan_namespace", {"namespace": state["target"]})
+        result = await mcp_client.call_tool("kubescape", "scan_namespace", {"namespace": safe_target})
         new_findings.append({"tool": "kubescape", "result": result})
         
     if "nmap_safe" in state["allowed_tools"] and "nmap" in decision_text:
-        result = await mcp_client.call_tool("hexstrike", "nmap_scan", {"target": state["target"]})
+        result = await mcp_client.call_tool("hexstrike", "nmap_scan", {"target": safe_target})
         new_findings.append({"tool": "nmap", "result": result})
 
     return {

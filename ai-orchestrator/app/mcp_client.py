@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 import asyncio
@@ -46,4 +47,5 @@ class ArgosMCPClient:
             logger.error(f"MCP Execution failed: {str(e)}")
             return json.dumps({"status": "error", "message": f"Internal execution failure: {str(e)}"})
 
-mcp_client = ArgosMCPClient("mcp-servers/mcp-config.json")
+default_config_path = os.path.join(os.path.dirname(__file__), "..", "mcp-servers", "mcp-config.json")
+mcp_client = ArgosMCPClient(default_config_path)

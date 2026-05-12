@@ -6,7 +6,10 @@ import uuid
 import logging
 import time
 import os
+import secrets
+from contextlib import asynccontextmanager
 from .agents.supervisor import run_supervisor_workflow
+from .mcp_client import mcp_client
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
@@ -22,20 +25,27 @@ def get_api_key(api_key_header: str = Security(api_key_header)) -> str:
         logger.error("ARGOS_API_KEY environment variable is missing. API is locked.")
         raise HTTPException(status_code=500, detail="Server misconfiguration")
         
-    if api_key_header == expected_key:
+    if api_key_header and secrets.compare_digest(api_key_header, expected_key):
         return api_key_header
     raise HTTPException(status_code=403, detail="Could not validate credentials")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Initializing MCP Client...")
+    await mcp_client.initialize()
+    yield
 
 app = FastAPI(
     title="ARGOS AI Orchestrator API",
     description="Secured API gateway for the AI-driven cloud-native security laboratory",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )

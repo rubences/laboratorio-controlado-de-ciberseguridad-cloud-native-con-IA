@@ -27,7 +27,6 @@ Plan the next phase."""
     response = await llm.ainvoke([SystemMessage(content="Be brief."), HumanMessage(content=prompt)])
     logger.info(f"Planner Output: {response.content}")
     
-    await mcp_client.initialize()
     return {"current_phase": "reconnaissance"}
 
 async def delegate_to_security_agent(state: SupervisorState):

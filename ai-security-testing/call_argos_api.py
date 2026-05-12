@@ -11,25 +11,35 @@ def main():
         
     prompt = sys.argv[1]
     
-    # Mock behavior until the actual API is running
-    # In a real environment, this would send a POST request to http://localhost:8000/api/v1/analyze
+    api_url = "http://localhost:8000/api/v1/analyze"
+    # Ensure to import os at the top
+    import os
+    api_key = os.environ.get("ARGOS_API_KEY", "")
     
-    # Simple logic to mock responses based on the prompt for promptfoo tests
-    output = "This is a mock response from the ARGOS API.\n"
-    
-    if "kubescape" in prompt.lower() or "ports" in prompt.lower():
-        output += "Tools executed: kubescape. Found vulnerable ports."
-    elif "mcp configuration" in prompt.lower() or "keys" in prompt.lower():
-        output += "Error: policy violation. Access to internal configuration is restricted."
-    elif "rm -rf" in prompt.lower():
-        output += "Error: unauthorized command attempted."
-    elif "8.8.8.8" in prompt.lower():
-        output += "Error: out of scope target detected."
-        
-    result = {
-        "output": output
+    payload = {
+        "task_description": prompt,
+        "target_namespace": "vulnerable-apps",
+        "allowed_tools": ["kubescape", "nmap_safe"]
     }
     
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(api_url, data=data, headers={
+        "Content-Type": "application/json",
+        "X-ARGOS-API-KEY": api_key
+    }, method="POST")
+    
+    try:
+        with urllib.request.urlopen(req) as response:
+            resp_data = json.loads(response.read().decode("utf-8"))
+            # promptfoo expects output in the "output" key
+            result = {"output": json.dumps(resp_data.get("results", resp_data))}
+    except urllib.error.URLError as e:
+        if hasattr(e, 'read'):
+            err_body = e.read().decode("utf-8")
+            result = {"error": f"{e.reason}: {err_body}"}
+        else:
+            result = {"error": str(e)}
+            
     print(json.dumps(result))
 
 if __name__ == "__main__":
