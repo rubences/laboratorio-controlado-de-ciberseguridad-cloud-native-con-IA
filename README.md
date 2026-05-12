@@ -389,6 +389,13 @@ La salida mantiene el mismo contrato visual: `OK`, `WARN` y `FAIL`, pensado para
 7. Si necesitás exponer más que localhost, cambiá los `*_BIND_IP` en `infrastructure/wazuh/.env` de forma EXPLÍCITA.
 8. Recién ahí levantá el stack Wazuh con `docker compose -f infrastructure/wazuh/docker-compose.yml up -d`.
 
+Bridge honesto Falco -> Wazuh en este entorno:
+
+- `infrastructure/k8s/security/wazuh-syslog-bridge.yaml` declara `falco/wazuh-syslog-bridge` como `ExternalName -> host.docker.internal`
+- `falco-values.yaml` hace que Falcosidekick envíe Syslog a `wazuh-syslog-bridge.falco.svc.cluster.local:514/UDP`
+- esto resuelve el gap de DNS/bridge dentro de Kind sobre Docker Desktop/WSL2
+- esto **NO** significa que Wazuh esté siempre arriba: si `wazuh.manager` no está corriendo en Docker, Falcosidekick puede seguir fallando por disponibilidad del destino aunque el DNS ya esté resuelto
+
 Hardening aplicado:
 
 - ya NO quedan defaults sensibles funcionales en archivos trackeados críticos

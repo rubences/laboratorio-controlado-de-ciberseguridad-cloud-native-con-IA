@@ -1,0 +1,8 @@
+﻿2026/05/12 18:15:16 [INFO]  : Falcosidekick version: 2.32.0
+2026/05/12 18:15:16 [INFO]  : Enabled Outputs: [WebUI Syslog]
+2026/05/12 18:15:16 [INFO]  : Falcosidekick is up and listening on :2801
+2026/05/12 18:16:37 [INFO]  : WebUI - Max concurrent requests: 1
+2026/05/12 18:16:37 [INFO]  : WebUI - POST OK (200)
+2026/05/12 18:16:37 [INFO]  : WebUI - POST OK (200)
+2026/05/12 18:16:37 [INFO]  : WebUI - POST OK (200)
+Found 2 pods, using pod/falco-falcosidekick-bbd975b89-ddrp4

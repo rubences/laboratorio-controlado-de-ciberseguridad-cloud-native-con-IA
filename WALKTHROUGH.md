@@ -378,7 +378,13 @@ Archivos esperados por corrida:
 Notas honestas:
 
 - si el contenedor objetivo no permite leer `/etc/shadow`, Falco puede no alertar y el script lo deja explícito como limitación
-- si `falcosidekick` sigue con salida Syslog a `wazuh.local` y ese destino no resuelve, la evidencia válida queda en los logs locales de Falco/Tetragon
+- si `falcosidekick` sigue fallando contra `wazuh-syslog-bridge`, el problema ya puede ser Wazuh caído/no escuchando en host, no necesariamente DNS; la evidencia válida queda en los logs locales de Falco/Tetragon
+
+### Bridge honesto Falcosidekick -> Wazuh
+
+Para este lab en Kind sobre Docker Desktop/WSL2, el repo declara `falco/wazuh-syslog-bridge` como `ExternalName -> host.docker.internal`. Así Falcosidekick deja de depender de `wazuh.local`, que no existe mágicamente dentro del cluster.
+
+PERO OJO: esto solo resuelve el puente de nombre/ruta hacia el host. Si `wazuh.manager` no está levantado en Docker o no escucha en `514/udp`, el pipeline completo a Wazuh va a seguir incompleto y eso se reporta como disponibilidad real del destino, no como falso "todo OK".
 
 ### Cobertura
 

@@ -18,11 +18,11 @@ falcosidekick:
   webui:
     enabled: true
   config:
-    # Ejemplo: Si tuviéramos wazuh, podríamos enviar logs vía syslog o webhook
-    # webhook:
-    #   address: "http://wazuh-manager:1514"
+    # Este bridge usa un Service ExternalName dentro del cluster para dejar de
+    # depender de `wazuh.local`, que NO existe por defecto en Kind/Docker Desktop.
+    # OJO: resolver el bridge NO implica que Wazuh esté levantado en el host.
     syslog:
-      host: "wazuh.local"
+      host: "wazuh-syslog-bridge.falco.svc.cluster.local"
       port: 514
       protocol: "udp"
 

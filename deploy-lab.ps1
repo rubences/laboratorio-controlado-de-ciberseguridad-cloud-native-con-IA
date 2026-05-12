@@ -6,6 +6,7 @@ $legacyAppsManifest = Join-Path $repoRoot "infrastructure/k8s/apps/vulnerable-ap
 $networkPoliciesManifest = Join-Path $repoRoot "infrastructure/k8s/security/network-policies.yaml"
 $kubescapeValues = Join-Path $repoRoot "infrastructure/k8s/security/kubescape-values.yaml"
 $falcoValues = Join-Path $repoRoot "infrastructure/k8s/security/falco-values.yaml"
+$wazuhBridgeManifest = Join-Path $repoRoot "infrastructure/k8s/security/wazuh-syslog-bridge.yaml"
 $tetragonValues = Join-Path $repoRoot "infrastructure/k8s/security/tetragon-values.yaml"
 $tetragonBaseConfig = Join-Path $repoRoot "infrastructure/k8s/security/tetragon-runtime-observability.yaml"
 $sandboxDir = Join-Path $repoRoot "k8s_platform/sandbox"
@@ -55,6 +56,30 @@ function Apply-YamlDirectory {
     Get-ChildItem -LiteralPath $DirectoryPath -Filter *.yaml | Sort-Object Name | ForEach-Object {
         kubectl apply -f $_.FullName
     }
+}
+
+function Apply-OptionalManifestIfNamespaceExists {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ManifestPath,
+        [Parameter(Mandatory = $true)]
+        [string]$Namespace,
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    if (-not (Test-Path -LiteralPath $ManifestPath)) {
+        throw "No existe el manifest esperado para ${Label}: $ManifestPath"
+    }
+
+    kubectl get namespace $Namespace *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Omitiendo ${Label}: namespace $Namespace todavía no existe." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "Aplicando ${Label}..." -ForegroundColor Cyan
+    kubectl apply -f $ManifestPath
 }
 
 Write-Host "Iniciando despliegue del Laboratorio ARGOS..." -ForegroundColor Green
@@ -126,6 +151,7 @@ if ($helmInstalled) {
     helm repo add falcosecurity https://falcosecurity.github.io/charts
     helm repo update
     helm upgrade --install falco falcosecurity/falco -n falco --create-namespace -f $falcoValues
+    Apply-OptionalManifestIfNamespaceExists -ManifestPath $wazuhBridgeManifest -Namespace 'falco' -Label 'bridge DNS/syslog Falcosidekick -> Wazuh'
 
     # Tetragon
     Write-Host "Instalando Tetragon para visibilidad eBPF/runtime..." -ForegroundColor Cyan
@@ -134,7 +160,10 @@ if ($helmInstalled) {
     helm upgrade --install tetragon cilium/tetragon -n tetragon --create-namespace -f $tetragonValues
 } else {
     Write-Host "Helm no está instalado. Omitiendo despliegue automático de Kubescape, Falco y Tetragon." -ForegroundColor Yellow
+    Apply-OptionalManifestIfNamespaceExists -ManifestPath $wazuhBridgeManifest -Namespace 'falco' -Label 'bridge DNS/syslog Falcosidekick -> Wazuh'
 }
 
 Write-Host "Despliegue del laboratorio base completado." -ForegroundColor Green
-Write-Host "Para Wazuh, ejecuta: cd infrastructure/wazuh && docker-compose up -d" -ForegroundColor Green
+Write-Host "Falcosidekick queda apuntando al Service wazuh-syslog-bridge (ExternalName -> host.docker.internal)." -ForegroundColor Green
+Write-Host "OJO: eso resuelve el bridge/DNS del cluster, pero NO levanta Wazuh ni garantiza recepción si el stack no está corriendo." -ForegroundColor Yellow
+Write-Host "Para Wazuh, ejecuta: docker compose -f infrastructure/wazuh/docker-compose.yml up -d" -ForegroundColor Green

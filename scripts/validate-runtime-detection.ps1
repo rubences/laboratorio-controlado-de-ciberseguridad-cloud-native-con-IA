@@ -268,8 +268,8 @@ if ($tetragonMatches.Count -eq 0) {
 Write-Step 'Recolectando estado de Falcosidekick (best-effort)'
 $falcosidekickLogs = Invoke-KubectlRaw -Arguments @('logs', '-n', $FalcoNamespace, 'deployment/falco-falcosidekick', '--tail=50') -AllowFailure
 Save-TextFile -Path (Join-Path $runDirectory 'falcosidekick.log') -Content $falcosidekickLogs.Text
-if ($falcosidekickLogs.Text -match 'Syslog - dial udp|i/o timeout|lookup wazuh.local') {
-    $summary.limitations += 'Falcosidekick muestra fallos de salida Syslog/Wazuh; la evidencia confiable queda en logs locales de Falco.'
+if ($falcosidekickLogs.Text -match 'Syslog - dial udp|i/o timeout|lookup wazuh\.local|lookup wazuh-syslog-bridge') {
+    $summary.limitations += 'Falcosidekick muestra fallos de salida Syslog/Wazuh. Si el bridge DNS ya resuelve pero Wazuh no está levantado, la limitación real pasa a ser disponibilidad del destino y la evidencia confiable queda en logs locales de Falco.'
 }
 
 $summaryPath = Join-Path $runDirectory 'summary.json'

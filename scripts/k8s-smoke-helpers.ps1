@@ -15,6 +15,7 @@ function Get-K8sSmokeManifestExpectations {
         [pscustomobject]@{ Label = 'Tetragon base manifest'; Path = Join-Path $RepoRoot 'infrastructure/k8s/security/tetragon-runtime-observability.yaml' },
         [pscustomobject]@{ Label = 'Kubescape values'; Path = Join-Path $RepoRoot 'infrastructure/k8s/security/kubescape-values.yaml' },
         [pscustomobject]@{ Label = 'Falco values'; Path = Join-Path $RepoRoot 'infrastructure/k8s/security/falco-values.yaml' },
+        [pscustomobject]@{ Label = 'Wazuh syslog bridge manifest'; Path = Join-Path $RepoRoot 'infrastructure/k8s/security/wazuh-syslog-bridge.yaml' },
         [pscustomobject]@{ Label = 'Tetragon values'; Path = Join-Path $RepoRoot 'infrastructure/k8s/security/tetragon-values.yaml' },
         [pscustomobject]@{ Label = 'Sandbox namespace manifest'; Path = Join-Path $RepoRoot 'k8s_platform/sandbox/namespace.yaml' },
         [pscustomobject]@{ Label = 'Sandbox MCP manifest'; Path = Join-Path $RepoRoot 'k8s_platform/sandbox/mcp-server.yaml' },
@@ -513,6 +514,47 @@ function Test-K8sHelmReleases {
     }
 }
 
+function Test-FalcoWazuhBridge {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$State,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $serviceResult = Invoke-KubectlCommand -Arguments @('get', 'service', 'wazuh-syslog-bridge', '-n', 'falco', '-o', 'json', '--request-timeout=5s') -WorkingDirectory $RepoRoot
+    if ($serviceResult.ExitCode -ne 0) {
+        Add-SmokeResult -State $State -Level 'WARN' -Message "Bridge Falco -> Wazuh no presente en runtime: falco/wazuh-syslog-bridge -> $(Get-CommandFailureSummary -Output $serviceResult.Output)"
+        return
+    }
+
+    try {
+        $serviceInfo = ConvertFrom-CommandJson -Output $serviceResult.Output
+        $serviceType = if ($serviceInfo.spec.type) { [string]$serviceInfo.spec.type } else { '' }
+        $externalName = if ($serviceInfo.spec.externalName) { [string]$serviceInfo.spec.externalName } else { '' }
+        $ports = if ($null -ne $serviceInfo.spec.ports) { @($serviceInfo.spec.ports) } else { @() }
+        $hasSyslogUdp514 = @($ports | Where-Object { $_.protocol -eq 'UDP' -and [int]$_.port -eq 514 }).Count -gt 0
+
+        if ($serviceType -eq 'ExternalName' -and $externalName -eq 'host.docker.internal' -and $hasSyslogUdp514) {
+            Add-SmokeResult -State $State -Level 'OK' -Message 'Bridge Falco -> Wazuh presente: Service ExternalName falco/wazuh-syslog-bridge -> host.docker.internal:514/UDP'
+        } else {
+            Add-SmokeResult -State $State -Level 'WARN' -Message "Bridge Falco -> Wazuh existe pero NO coincide con lo esperado (type=$serviceType, externalName=$externalName, udp514=$hasSyslogUdp514)"
+        }
+    } catch {
+        Add-SmokeResult -State $State -Level 'WARN' -Message "No se pudo parsear el Service falco/wazuh-syslog-bridge -> $($_.Exception.Message)"
+        return
+    }
+
+    $dnsCommand = 'getent hosts wazuh-syslog-bridge.falco.svc.cluster.local || nslookup wazuh-syslog-bridge.falco.svc.cluster.local'
+    $dnsResult = Invoke-KubectlCommand -Arguments @('exec', '-n', 'targets', 'deployment/dvwa', '--', 'sh', '-c', $dnsCommand) -WorkingDirectory $RepoRoot
+    if ($dnsResult.ExitCode -eq 0) {
+        Add-SmokeResult -State $State -Level 'OK' -Message 'Bridge Falco -> Wazuh resolvible desde un pod del cluster (targets/dvwa)'
+    } else {
+        Add-SmokeResult -State $State -Level 'WARN' -Message "Bridge Falco -> Wazuh NO resolvible desde targets/dvwa -> $(Get-CommandFailureSummary -Output $dnsResult.Output)"
+    }
+}
+
 function Invoke-K8sRuntimeSmoke {
     param(
         [Parameter(Mandatory = $true)]
@@ -619,6 +661,7 @@ function Invoke-K8sRuntimeSmoke {
     if ($falcoNamespaceCheck.ExitCode -eq 0) {
         Test-K8sDaemonSetReadiness -State $state -RepoRoot $RepoRoot -Namespace 'falco' -DaemonSet 'falco' -Label 'Falco runtime sensor'
         Test-K8sPodsByLabel -State $state -RepoRoot $RepoRoot -Namespace 'falco' -Selector 'app.kubernetes.io/name=falco' -Label 'Falco runtime sensor'
+        Test-FalcoWazuhBridge -State $state -RepoRoot $RepoRoot
     } else {
         Add-SmokeResult -State $state -Level 'WARN' -Message 'Falco no parece desplegado en runtime (namespace falco ausente); se omiten checks operativos del DaemonSet/pods.'
     }
