@@ -83,10 +83,6 @@ services:
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD in infrastructure/wazuh/.env}
       - API_USERNAME=${API_USERNAME:-wazuh-wui}
       - API_PASSWORD=${API_PASSWORD:?Set API_PASSWORD in infrastructure/wazuh/.env}
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     volumes:
       - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
       - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro

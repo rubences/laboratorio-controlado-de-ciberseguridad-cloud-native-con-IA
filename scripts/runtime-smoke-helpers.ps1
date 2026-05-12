@@ -80,11 +80,11 @@ function Show-SmokeSummary {
 
 function Get-DockerComposeCommand {
     if (Get-Command 'docker' -ErrorAction SilentlyContinue) {
-        return @('docker', 'compose')
+        return 'docker'
     }
 
     if (Get-Command 'docker-compose' -ErrorAction SilentlyContinue) {
-        return @('docker-compose')
+        return 'docker-compose'
     }
 
     throw 'No se encontró Docker Compose. Instalá Docker Desktop o docker-compose antes de continuar.'
@@ -123,8 +123,32 @@ function Invoke-DockerCompose {
     )
 
     $composeCommand = Get-DockerComposeCommand
-    $commandParts = $composeCommand + @('--project-directory', $ProjectDirectory, '-f', $ComposeFile) + $ComposeArguments
+    $commandParts = if ($composeCommand -eq 'docker') {
+        @('docker', 'compose', '--project-directory', $ProjectDirectory, '-f', $ComposeFile) + $ComposeArguments
+    } else {
+        @('docker-compose', '--project-directory', $ProjectDirectory, '-f', $ComposeFile) + $ComposeArguments
+    }
     Invoke-ExternalCommand -CommandParts $commandParts -WorkingDirectory $ProjectDirectory
+}
+
+function Get-DockerContainerStates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$ContainerNames
+    )
+
+    $states = @{}
+    foreach ($containerName in $ContainerNames) {
+        $result = Invoke-ExternalCommand -CommandParts @('docker', 'inspect', '--format', '{{.State.Status}}', $containerName) -WorkingDirectory $PWD.Path
+        if ($result.ExitCode -ne 0 -or $result.Output.Count -eq 0) {
+            $states[$containerName] = $null
+            continue
+        }
+
+        $states[$containerName] = ($result.Output[0]).Trim()
+    }
+
+    return $states
 }
 
 function Get-EnvMap {
@@ -443,17 +467,23 @@ function Invoke-WazuhRuntimeSmoke {
         Add-SmokeResult -State $state -Level 'FAIL' -Message "Servicios esperados no running en Wazuh: $($missingServices -join ', ')"
     }
 
-    $runningContainers = Get-DockerRunningContainerNames
-    if (-not $runningContainers.Success) {
-        Add-SmokeResult -State $state -Level 'WARN' -Message "No se pudo listar docker ps para validar nombres de contenedor: $($runningContainers.Detail)"
+    $expectedContainers = @('wazuh.indexer', 'wazuh.manager', 'wazuh.dashboard')
+    $containerStates = Get-DockerContainerStates -ContainerNames $expectedContainers
+    $missingContainers = @($expectedContainers | Where-Object { -not $containerStates.ContainsKey($_) -or $null -eq $containerStates[$_] })
+    if ($missingContainers.Count -eq 0) {
+        Add-SmokeResult -State $state -Level 'OK' -Message 'Los contenedores esperados de Wazuh existen con los nombres previstos'
     } else {
-        $expectedContainers = @('wazuh.indexer', 'wazuh.manager', 'wazuh.dashboard')
-        $missingContainers = @($expectedContainers | Where-Object { $_ -notin $runningContainers.Names })
-        if ($missingContainers.Count -eq 0) {
-            Add-SmokeResult -State $state -Level 'OK' -Message 'Los contenedores esperados de Wazuh existen con los nombres previstos'
-        } else {
-            Add-SmokeResult -State $state -Level 'FAIL' -Message "Contenedores Wazuh no detectados en docker ps: $($missingContainers -join ', ')"
-        }
+        Add-SmokeResult -State $state -Level 'FAIL' -Message "Contenedores Wazuh no detectados vía docker inspect: $($missingContainers -join ', ')"
+    }
+
+    $nonRunningContainers = @($expectedContainers | Where-Object {
+        $containerStates.ContainsKey($_) -and $null -ne $containerStates[$_] -and $containerStates[$_] -ne 'running'
+    })
+    if ($nonRunningContainers.Count -eq 0) {
+        Add-SmokeResult -State $state -Level 'OK' -Message 'Los contenedores esperados de Wazuh están realmente en estado running'
+    } else {
+        $details = @($nonRunningContainers | ForEach-Object { "$_=$($containerStates[$_])" })
+        Add-SmokeResult -State $state -Level 'FAIL' -Message "Contenedores Wazuh fuera de running: $($details -join ', ')"
     }
 
     foreach ($requiredPort in @(8444, 55000)) {

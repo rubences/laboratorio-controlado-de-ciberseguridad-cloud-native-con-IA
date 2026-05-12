@@ -12,11 +12,11 @@ $certsDir = Join-Path $wazuhDir "config/wazuh_indexer_ssl_certs"
 
 function Get-DockerComposeCommand {
     if (Get-Command "docker" -ErrorAction SilentlyContinue) {
-        return @("docker", "compose")
+        return "docker"
     }
 
     if (Get-Command "docker-compose" -ErrorAction SilentlyContinue) {
-        return @("docker-compose")
+        return "docker-compose"
     }
 
     throw "No se encontró Docker Compose. Instalá Docker Desktop o docker-compose antes de continuar."
@@ -29,9 +29,12 @@ function Invoke-DockerCompose {
     )
 
     $composeCommand = Get-DockerComposeCommand
-    $commandName = $composeCommand[0]
-    $baseArgs = if ($composeCommand.Length -gt 1) { $composeCommand[1..($composeCommand.Length - 1)] } else { @() }
-    & $commandName @baseArgs @Arguments
+    if ($composeCommand -eq "docker") {
+        & docker compose @Arguments
+        return
+    }
+
+    & docker-compose @Arguments
 }
 
 if (-not (Test-Path -LiteralPath $wazuhDir)) {
