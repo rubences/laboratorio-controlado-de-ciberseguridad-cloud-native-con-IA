@@ -3,9 +3,14 @@
 
 tty: true
 
-# Driver de recolección de eventos (ebpf es moderno y recomendado en K8s/Kind)
+# En Kind sobre WSL2 el probe eBPF clásico suele fallar porque intenta
+# descargar/compilar artefactos dependientes del kernel host.
+# modern_ebpf evita ese init container y tiene mejores chances reales acá.
 driver:
-  kind: ebpf
+  kind: modern_ebpf
+  modernEbpf:
+    leastPrivileged: false
+    cpusForEachBuffer: 2
 
 # Exponer métricas y webhooks si queremos integrarlo con Wazuh u otros
 falcosidekick:

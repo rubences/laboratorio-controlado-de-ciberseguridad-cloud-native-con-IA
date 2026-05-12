@@ -113,6 +113,10 @@ graph TD
 7. `infrastructure/k8s/security/tetragon-runtime-observability.yaml`
 8. Helm opcional para **Kubescape**, **Falco** y **Tetragon**
 
+### Nota honesta sobre Falco en Kind sobre WSL2
+
+En este repo Falco queda configurado para preferir `modern_ebpf` en vez del probe `ebpf` clásico. ¿Y sabés por qué? Porque en WSL2 el camino clásico suele intentar bajar un probe precompilado para un kernel muy específico o compilarlo con headers del host; cuando eso falla, el init container entra en crash loop. `modern_ebpf` evita esa dependencia y tiene bastante más chances reales de levantar en este entorno.
+
 Si el clúster ya existe y solo querés reconciliar manifests/runtime, corré:
 
 ```powershell
@@ -347,6 +351,34 @@ El repo ahora también trae smoke checks PowerShell para la capa Kubernetes. MIS
 ./scripts/check-k8s-runtime-smoke.ps1 -Mode Auto
 ./scripts/check-k8s-runtime-smoke.ps1 -Mode Runtime
 ```
+
+## 🧪 Validación real de detección runtime (Falco + Tetragon)
+
+Cuando quieras validar detección REAL sin hacer nada destructivo, usá:
+
+```powershell
+./scripts/validate-runtime-detection.ps1
+```
+
+Qué hace este helper:
+
+- resuelve un pod real del laboratorio (default: `targets/dvwa`)
+- ejecuta un `sh -c "id && whoami && cat /etc/os-release | sed -n 1,2p"` para generar telemetría de procesos reproducible en **Tetragon**
+- ejecuta una lectura controlada `cat /etc/shadow > /dev/null` para intentar disparar una regla segura de **Falco** sin volcar el contenido sensible a la evidencia
+- junta evidencia en `evidence/runtime-detection/<timestamp>/`
+
+Archivos esperados por corrida:
+
+- `summary.md` y `summary.json`
+- `target-process-command.txt`
+- `falco-alerts.jsonl`
+- `tetragon-process-events.jsonl`
+- `falcosidekick.log`
+
+Notas honestas:
+
+- si el contenedor objetivo no permite leer `/etc/shadow`, Falco puede no alertar y el script lo deja explícito como limitación
+- si `falcosidekick` sigue con salida Syslog a `wazuh.local` y ese destino no resuelve, la evidencia válida queda en los logs locales de Falco/Tetragon
 
 ### Cobertura
 

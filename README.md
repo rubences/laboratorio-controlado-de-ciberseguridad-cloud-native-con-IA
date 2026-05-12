@@ -91,7 +91,7 @@ Mantiene lo que el layout moderno NO debe duplicar:
 
 ## Sensores del escenario
 
-- **Falco**: detección runtime clásica en Kubernetes.
+- **Falco**: detección runtime en Kubernetes. En este laboratorio Kind sobre WSL2 se prioriza `modern_ebpf`, porque el probe eBPF clásico depende de artefactos/kernel headers del host y suele romperse en WSL2.
 - **Kubescape**: postura/configuración + correlación de seguridad.
 - **Tetragon**: **sensor eBPF de runtime y visibilidad de procesos**. Queda integrado como base de observabilidad/runtime, NO como respuesta productiva mágica ya terminada.
 - **Wazuh**: capa externa tipo SIEM/XDR para agregación y análisis complementario.

@@ -1,0 +1,33 @@
+﻿{
+    "started_at_utc":  "2026-05-12T17:50:09Z",
+    "kubectl_context":  "kind-argos-lab",
+    "target":  {
+                   "namespace":  "targets",
+                   "app":  "dvwa",
+                   "pod":  "dvwa-5688bcb659-4hswm",
+                   "node":  "argos-lab-worker"
+               },
+    "sensors":  {
+                    "falco_pod":  "falco-j7rd4",
+                    "tetragon_pod":  "tetragon-5xnrl"
+                },
+    "actions":  [
+                    {
+                        "name":  "process_exec_probe",
+                        "command":  "id \u0026\u0026 whoami \u0026\u0026 cat /etc/os-release | sed -n 1,2p",
+                        "exit_code":  0
+                    },
+                    {
+                        "name":  "falco_sensitive_file_probe",
+                        "command":  "cat /etc/shadow \u003e /dev/null",
+                        "exit_code":  0
+                    }
+                ],
+    "evidence":  {
+                     "falco_matches":  1,
+                     "tetragon_matches":  20
+                 },
+    "limitations":  [
+                        "Falcosidekick muestra fallos de salida Syslog/Wazuh; la evidencia confiable queda en logs locales de Falco."
+                    ]
+}

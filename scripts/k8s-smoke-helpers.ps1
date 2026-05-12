@@ -261,14 +261,119 @@ function Test-K8sNamespaceExists {
         [string]$RepoRoot,
 
         [Parameter(Mandatory = $true)]
-        [string]$Namespace
+        [string]$Namespace,
+
+        [ValidateSet('FAIL', 'WARN')]
+        [string]$FailureLevel = 'FAIL'
     )
 
     $result = Invoke-KubectlCommand -Arguments @('get', 'namespace', $Namespace, '--request-timeout=5s', '-o', 'name') -WorkingDirectory $RepoRoot
     if ($result.ExitCode -eq 0) {
         Add-SmokeResult -State $State -Level 'OK' -Message "Namespace presente: $Namespace"
     } else {
-        Add-SmokeResult -State $State -Level 'FAIL' -Message "Namespace ausente o inaccesible: $Namespace -> $(Get-CommandFailureSummary -Output $result.Output)"
+        Add-SmokeResult -State $State -Level $FailureLevel -Message "Namespace ausente o inaccesible: $Namespace -> $(Get-CommandFailureSummary -Output $result.Output)"
+    }
+}
+
+function Test-K8sDaemonSetReadiness {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$State,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Namespace,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DaemonSet,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Label,
+
+        [ValidateSet('FAIL', 'WARN')]
+        [string]$FailureLevel = 'FAIL'
+    )
+
+    $result = Invoke-KubectlCommand -Arguments @('get', 'daemonset', $DaemonSet, '-n', $Namespace, '-o', 'json', '--request-timeout=5s') -WorkingDirectory $RepoRoot
+    if ($result.ExitCode -ne 0) {
+        Add-SmokeResult -State $State -Level $FailureLevel -Message "${Label}: daemonset ausente o inaccesible -> $(Get-CommandFailureSummary -Output $result.Output)"
+        return
+    }
+
+    try {
+        $daemonSetInfo = ConvertFrom-CommandJson -Output $result.Output
+        $desired = Get-OptionalIntProperty -Object $daemonSetInfo.status -PropertyName 'desiredNumberScheduled' -DefaultValue 0
+        $ready = Get-OptionalIntProperty -Object $daemonSetInfo.status -PropertyName 'numberReady' -DefaultValue 0
+        $available = Get-OptionalIntProperty -Object $daemonSetInfo.status -PropertyName 'numberAvailable' -DefaultValue 0
+        $updated = Get-OptionalIntProperty -Object $daemonSetInfo.status -PropertyName 'updatedNumberScheduled' -DefaultValue 0
+
+        if ($desired -gt 0 -and $ready -ge $desired -and $available -ge $desired -and $updated -ge $desired) {
+            Add-SmokeResult -State $State -Level 'OK' -Message "${Label}: daemonset listo ($ready/$desired ready, $available/$desired available, $updated/$desired updated)"
+        } else {
+            Add-SmokeResult -State $State -Level $FailureLevel -Message "${Label}: daemonset NO listo ($ready/$desired ready, $available/$desired available, $updated/$desired updated)"
+        }
+    } catch {
+        Add-SmokeResult -State $State -Level $FailureLevel -Message "${Label}: no se pudo parsear el estado del daemonset -> $($_.Exception.Message)"
+    }
+}
+
+function Test-K8sPodsByLabel {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$State,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Namespace,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Selector,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Label,
+
+        [ValidateSet('FAIL', 'WARN')]
+        [string]$FailureLevel = 'FAIL'
+    )
+
+    $result = Invoke-KubectlCommand -Arguments @('get', 'pods', '-n', $Namespace, '-l', $Selector, '-o', 'json', '--request-timeout=5s') -WorkingDirectory $RepoRoot
+    if ($result.ExitCode -ne 0) {
+        Add-SmokeResult -State $State -Level $FailureLevel -Message "${Label}: pods inaccesibles -> $(Get-CommandFailureSummary -Output $result.Output)"
+        return
+    }
+
+    try {
+        $podsInfo = ConvertFrom-CommandJson -Output $result.Output
+        $items = if ($null -eq $podsInfo -or $null -eq $podsInfo.items) { @() } elseif ($podsInfo.items -is [System.Array]) { $podsInfo.items } else { @($podsInfo.items) }
+        if ($items.Count -eq 0) {
+            Add-SmokeResult -State $State -Level $FailureLevel -Message "${Label}: no se encontraron pods para selector '$Selector'"
+            return
+        }
+
+        $badPods = @()
+        foreach ($pod in $items) {
+            $phase = if ($pod.status.phase) { [string]$pod.status.phase } else { 'Unknown' }
+            $containerStatuses = if ($null -ne $pod.status.containerStatuses) { @($pod.status.containerStatuses) } else { @() }
+            $readyContainers = @($containerStatuses | Where-Object { $_.ready -eq $true }).Count
+            $totalContainers = $containerStatuses.Count
+            $allReady = $totalContainers -gt 0 -and $readyContainers -eq $totalContainers
+
+            if ($phase -ne 'Running' -or -not $allReady) {
+                $badPods += "$($pod.metadata.name) phase=$phase ready=$readyContainers/$totalContainers"
+            }
+        }
+
+        if ($badPods.Count -eq 0) {
+            Add-SmokeResult -State $State -Level 'OK' -Message "${Label}: $($items.Count) pod(s) Running y Ready"
+        } else {
+            Add-SmokeResult -State $State -Level $FailureLevel -Message "${Label}: pods NO operativos -> $($badPods -join '; ')"
+        }
+    } catch {
+        Add-SmokeResult -State $State -Level $FailureLevel -Message "${Label}: no se pudo parsear el estado de pods -> $($_.Exception.Message)"
     }
 }
 
@@ -483,11 +588,13 @@ function Invoke-K8sRuntimeSmoke {
         return $state
     }
 
-    Add-SmokeResult -State $state -Level 'OK' -Message 'Cluster accesible: se ejecutan runtime checks de namespaces, deployments, ConfigMap, Helm y network policies'
+    Add-SmokeResult -State $state -Level 'OK' -Message 'Cluster accesible: se ejecutan runtime checks de namespaces, deployments, daemonsets/pods operativos, ConfigMap, Helm y network policies'
 
     foreach ($namespace in @('ingress-nginx', 'sandbox', 'targets', 'vulnerable-apps', 'tetragon')) {
         Test-K8sNamespaceExists -State $state -RepoRoot $RepoRoot -Namespace $namespace
     }
+
+    Test-K8sNamespaceExists -State $state -RepoRoot $RepoRoot -Namespace 'falco' -FailureLevel 'WARN'
 
     $deploymentChecks = @(
         [pscustomobject]@{ Namespace = 'ingress-nginx'; Deployment = 'ingress-nginx-controller'; Label = 'Ingress NGINX controller' },
@@ -507,6 +614,14 @@ function Invoke-K8sRuntimeSmoke {
     }
 
     Test-K8sConfigMapExists -State $state -RepoRoot $RepoRoot -Namespace 'tetragon' -ConfigMapName 'tetragon-lab-profile'
+
+    $falcoNamespaceCheck = Invoke-KubectlCommand -Arguments @('get', 'namespace', 'falco', '--request-timeout=5s', '-o', 'name') -WorkingDirectory $RepoRoot
+    if ($falcoNamespaceCheck.ExitCode -eq 0) {
+        Test-K8sDaemonSetReadiness -State $state -RepoRoot $RepoRoot -Namespace 'falco' -DaemonSet 'falco' -Label 'Falco runtime sensor'
+        Test-K8sPodsByLabel -State $state -RepoRoot $RepoRoot -Namespace 'falco' -Selector 'app.kubernetes.io/name=falco' -Label 'Falco runtime sensor'
+    } else {
+        Add-SmokeResult -State $state -Level 'WARN' -Message 'Falco no parece desplegado en runtime (namespace falco ausente); se omiten checks operativos del DaemonSet/pods.'
+    }
 
     $expectedPoliciesByNamespace = @{
         'vulnerable-apps' = @('default-deny-all', 'allow-web-ingress', 'allow-dns-egress')
