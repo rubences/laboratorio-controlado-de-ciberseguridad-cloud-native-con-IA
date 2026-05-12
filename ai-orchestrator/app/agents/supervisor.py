@@ -1,12 +1,21 @@
 import logging
 import asyncio
+import os
+import re
 from typing import TypedDict, Literal
 from .subagents.security_agent import build_security_subagent
-from ..mcp_client import mcp_client
 from ..runtime_compat import HumanMessage, LANGGRAPH_AVAILABLE, START, END, StateGraph, SystemMessage, build_chat_model
 
 logger = logging.getLogger("hexstrike.supervisor")
 llm = build_chat_model(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.2)
+
+DEFAULT_ALLOWED_NAMESPACES = {"sandbox", "targets", "vulnerable-apps"}
+SUPPORTED_TOOLS = {"burp", "kubescape", "neurosploit", "nmap_safe"}
+BLOCKED_TASK_PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
+    (re.compile(r"\bmcp\s+configuration\b|\bmcp[-_ ]config\b|\bapi\s*keys?\b|\bsecrets?\b", re.IGNORECASE), "policy violation", "internal configuration access attempted"),
+    (re.compile(r"\brm\s+-rf\b|\bdelete\b|\bdrop\s+database\b|\bformat\b", re.IGNORECASE), "unauthorized", "destructive command attempted"),
+    (re.compile(r"\b8\.8\.8\.8\b|\b1\.1\.1\.1\b|\bexternal\b|\bpublic internet\b", re.IGNORECASE), "out of scope", "out-of-scope target detected"),
+)
 
 class SupervisorState(TypedDict):
     task: str
@@ -16,24 +25,55 @@ class SupervisorState(TypedDict):
     subagent_findings: list[dict]
     status: str
     require_approval: bool
+    policy_checks: list[dict]
+
+
+def _get_allowed_namespaces() -> set[str]:
+    raw_namespaces = os.environ.get("ARGOS_ALLOWED_NAMESPACES", "")
+    if not raw_namespaces.strip():
+        return DEFAULT_ALLOWED_NAMESPACES
+
+    parsed_namespaces = {value.strip() for value in raw_namespaces.split(",") if value.strip()}
+    return parsed_namespaces or DEFAULT_ALLOWED_NAMESPACES
+
+
+def _build_policy_error(reason: str, detail: str) -> dict:
+    logger.warning("Policy Gate triggered: %s.", detail)
+    return {
+        "status": f"error: {reason}",
+        "current_phase": "blocked",
+        "policy_checks": [{"decision": "blocked", "reason": reason, "detail": detail}],
+    }
 
 async def policy_gate_node(state: SupervisorState):
     logger.info("Evaluating task against Security Policies (Policy Gate)...")
-    task_lower = state['task'].lower()
-    
-    if "mcp configuration" in task_lower or "keys" in task_lower:
-        logger.warning("Policy Gate triggered: Internal configuration access attempted.")
-        return {"status": "error: policy violation", "current_phase": "blocked"}
-        
-    if "rm -rf" in task_lower or "delete" in task_lower:
-        logger.warning("Policy Gate triggered: Destructive command attempted.")
-        return {"status": "error: unauthorized", "current_phase": "blocked"}
-        
-    if "8.8.8.8" in task_lower or "external" in task_lower:
-        logger.warning("Policy Gate triggered: Out of scope target detected.")
-        return {"status": "error: out of scope", "current_phase": "blocked"}
-        
-    return {"status": "running"}
+    task = state["task"]
+    namespace = state["namespace"].strip()
+    requested_tools = state.get("allowed_tools", [])
+    allowed_namespaces = _get_allowed_namespaces()
+
+    if not namespace or namespace not in allowed_namespaces:
+        return _build_policy_error("out of scope", f"namespace '{namespace or '<empty>'}' is not allowed")
+
+    unknown_tools = sorted({tool for tool in requested_tools if tool not in SUPPORTED_TOOLS})
+    if unknown_tools:
+        return _build_policy_error("policy violation", f"unsupported tools requested: {', '.join(unknown_tools)}")
+
+    if not requested_tools:
+        return _build_policy_error("policy violation", "no tools were requested for the task")
+
+    for pattern, reason, detail in BLOCKED_TASK_PATTERNS:
+        if pattern.search(task):
+            return _build_policy_error(reason, detail)
+
+    return {
+        "status": "running",
+        "policy_checks": [{
+            "decision": "allowed",
+            "namespace": namespace,
+            "tools": requested_tools,
+        }],
+    }
 
 async def planner_node(state: SupervisorState):
     logger.info("Supervisor Planner delegating task...")
@@ -124,7 +164,8 @@ async def run_supervisor_workflow(task: str, namespace: str, tools: list[str], r
         current_phase="init",
         subagent_findings=[],
         status="running",
-        require_approval=require_approval
+        require_approval=require_approval,
+        policy_checks=[]
     )
 
     if LANGGRAPH_AVAILABLE:
@@ -136,13 +177,15 @@ async def run_supervisor_workflow(task: str, namespace: str, tools: list[str], r
     if final_state.get("status", "").startswith("error"):
         return {
             "status": "error",
-            "message": final_state.get("status").split(": ", 1)[1] if ": " in final_state.get("status", "") else final_state.get("status")
+            "message": final_state.get("status").split(": ", 1)[1] if ": " in final_state.get("status", "") else final_state.get("status"),
+            "policy_checks": final_state.get("policy_checks", []),
         }
-        
+         
     return {
         "status": final_state.get("status"),
         "total_findings": len(final_state.get("subagent_findings", [])),
-        "details": final_state.get("subagent_findings", [])
+        "details": final_state.get("subagent_findings", []),
+        "policy_checks": final_state.get("policy_checks", []),
     }
 
 

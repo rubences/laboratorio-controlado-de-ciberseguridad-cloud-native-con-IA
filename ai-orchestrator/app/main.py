@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import uuid
 import logging
 import time
@@ -18,6 +18,30 @@ logger = logging.getLogger("hexstrike.api")
 
 API_KEY_NAME = "X-ARGOS-API-KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+DEFAULT_CORS_ALLOW_ORIGINS = [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+]
+
+
+def get_cors_allow_origins() -> list[str]:
+    raw_value = os.environ.get("ARGOS_CORS_ALLOW_ORIGINS", "")
+    if not raw_value.strip():
+        return DEFAULT_CORS_ALLOW_ORIGINS
+
+    origins = [origin.strip() for origin in raw_value.split(",") if origin.strip()]
+    if not origins:
+        return DEFAULT_CORS_ALLOW_ORIGINS
+
+    return ["*"] if "*" in origins else origins
+
 
 def get_api_key(api_key_header: str = Security(api_key_header)) -> str:
     # Read key from environment securely instead of hardcoding
@@ -43,9 +67,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+cors_allow_origins = get_cors_allow_origins()
+logger.info("Configured CORS allow origins: %s", cors_allow_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_allow_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
@@ -64,7 +91,7 @@ class SecurityTaskResponse(BaseModel):
     results: dict
 
 @app.middleware("http")
-async def add_correlation_id_and_time(request, call_next):
+async def add_correlation_id_and_time(request: Request, call_next):
     correlation_id = str(uuid.uuid4())
     request.state.correlation_id = correlation_id
     start_time = time.time()

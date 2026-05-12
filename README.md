@@ -227,6 +227,19 @@ Eso evita vender humo: si corrés `legacy_bridge`, los findings quedan marcados 
 7. aplica base config de **Tetragon**
 8. si existe Helm, instala **Kubescape + Falco + Tetragon**
 
+### Variables operativas útiles para `deploy-lab.ps1`
+
+- `ARGOS_INGRESS_NGINX_MANIFEST`: permite sobreescribir el manifest de ingress. Default: release pinneada `controller-v1.11.5` de `ingress-nginx` para Kind, en vez de `main` remoto mutable.
+- `ARGOS_INGRESS_WAIT_TIMEOUT`: timeout para `kubectl wait` del controller. Default: `90s`.
+
+Ejemplo:
+
+```powershell
+$env:ARGOS_INGRESS_NGINX_MANIFEST = "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.5/deploy/static/provider/kind/deploy.yaml"
+$env:ARGOS_INGRESS_WAIT_TIMEOUT = "180s"
+./deploy-lab.ps1
+```
+
 ## Demo script endurecido
 
 `demo-scenario.ps1` ya NO hardcodea la API key. Ahora la toma desde:
@@ -258,15 +271,63 @@ Se endureció `.gitignore` para reducir riesgo de trackear material criptográfi
 
 ## Bootstrap seguro de Wazuh y CALDERA
 
+## Runtime smoke checks operativos
+
+Se agregan smoke checks PowerShell SIN build y SIN depender de internet para validar precondiciones y estado runtime básico de Wazuh/CALDERA.
+
+### Scripts disponibles
+
+- `./scripts/check-runtime-smoke.ps1`: wrapper para ambos stacks.
+- `./scripts/check-wazuh-runtime-smoke.ps1`: smoke dedicado de Wazuh.
+- `./scripts/check-caldera-runtime-smoke.ps1`: smoke dedicado de CALDERA.
+
+### Modos
+
+- `Precheck`: valida archivos requeridos + `docker compose config`. NO falla por stack apagado.
+- `Auto`: corre precheck y, si detecta contenedores running, agrega checks runtime. Si el stack no está arriba, deja `WARN` y sigue.
+- `Runtime`: además del precheck, EXIGE stack levantado y valida contenedores/puertos.
+
+### Ejemplos de uso
+
+```powershell
+./scripts/check-runtime-smoke.ps1 -Mode Precheck
+./scripts/check-runtime-smoke.ps1 -Stack Wazuh -Mode Auto
+./scripts/check-runtime-smoke.ps1 -Stack Caldera -Mode Runtime
+
+./scripts/check-wazuh-runtime-smoke.ps1 -Mode Runtime
+./scripts/check-caldera-runtime-smoke.ps1 -Mode Precheck
+```
+
+### Qué valida cada smoke
+
+#### Wazuh
+
+- existencia de `infrastructure/wazuh/.env`
+- secretos críticos no vacíos en `.env`
+- existencia del `wazuh.local.yml` efectivo
+- placeholder `__SET_WAZUH_API_PASSWORD__` resuelto
+- certificados locales requeridos
+- `docker compose config`
+- si el stack está arriba: servicios/contenedores esperados + puertos locales `8444` y `55000` (y reporte opcional de `9200`)
+
+#### CALDERA
+
+- existencia de `offensive/caldera/docker-compose.yml`
+- `.env` local opcional (si falta, informa `WARN`, no `FAIL`)
+- `docker compose config`
+- si el stack está arriba: servicio/contenedor esperado + puerto local `8889`
+- si `8889` responde, intenta además un GET HTTP básico local
+- reporte opcional de `8443`, `7010`, `7011/udp`, `7012` y `8853`
+
 ### Wazuh
 
 1. Copiá `infrastructure/wazuh/.env.example` a `infrastructure/wazuh/.env`.
 2. Completá `INDEXER_PASSWORD`, `API_PASSWORD` y `DASHBOARD_PASSWORD` con secretos fuertes.
 3. Si tu topología local cambia, ajustá `infrastructure/wazuh/config/certs.yml` ANTES de regenerar certificados.
-4. Regenerá el material TLS localmente:
+4. Regenerá el material TLS localmente con el helper del repo:
 
 ```powershell
-docker compose -f infrastructure/wazuh/generate-certs.yml run --rm generator
+./scripts/bootstrap-wazuh-tls.ps1
 ```
 
 5. Copiá `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml.example` a `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml`.
@@ -284,11 +345,29 @@ Hardening aplicado:
 
 Rotación recomendada de Wazuh:
 
-1. `docker compose -f infrastructure/wazuh/docker-compose.yml down`
-2. eliminar localmente los PEM/KEY existentes dentro de `infrastructure/wazuh/config/wazuh_indexer_ssl_certs/`
-3. regenerar con `generate-certs.yml`
-4. volver a levantar el stack
-5. si buscás un bootstrap realmente limpio de CA/estado, recrear manualmente los volúmenes de Wazuh antes de levantar otra vez
+1. Reset liviano de certs:
+
+   ```powershell
+   ./scripts/reset-wazuh-state.ps1 -RemoveCerts
+   ./scripts/bootstrap-wazuh-tls.ps1
+   ```
+
+2. Reset limpio de estado + volúmenes:
+
+   ```powershell
+   ./scripts/reset-wazuh-state.ps1 -RemoveCerts -RemoveVolumes
+   ./scripts/bootstrap-wazuh-tls.ps1
+   ```
+
+3. volver a levantar el stack.
+
+Variables/env relevantes de Wazuh:
+
+- `INDEXER_PASSWORD`, `API_PASSWORD`, `DASHBOARD_PASSWORD`: obligatorias en `infrastructure/wazuh/.env`
+- `INDEXER_USERNAME`, `API_USERNAME`, `DASHBOARD_USERNAME`: opcionales si necesitás override local
+- `WAZUH_INDEXER_BIND_IP`, `WAZUH_API_BIND_IP`, `WAZUH_DASHBOARD_BIND_IP`: exposición loopback por default
+- `WAZUH_INGEST_BIND_IP`, `WAZUH_SYSLOG_BIND_IP`: mantienen puertos de ingesta/sislog abiertos para el laboratorio, pero podés cerrarlos más si tu demo no los necesita
+- `WAZUH_DASHBOARD_CONFIG_PATH`: override opcional del archivo local montado en dashboard
 
 ### CALDERA
 
@@ -297,7 +376,12 @@ Rotación recomendada de Wazuh:
 3. Guardá las credenciales/API keys que CALDERA muestra en logs al crear `local.yml`.
 4. NO uses `--insecure` salvo para debugging aislado y efímero.
 5. Si activás certificados HTTPS propios para CALDERA, mantenelos como material LOCAL/NO versionado dentro de `conf/local.yml` o en un volumen, nunca en el repo.
-6. Si ya venías usando CALDERA con un volumen previo, regenerá `caldera_conf` manualmente si querés descartar secretos viejos.
+6. Si ya venías usando CALDERA con un volumen previo, regenerá `caldera_conf` con el helper del repo si querés descartar secretos viejos:
+
+```powershell
+./scripts/reset-caldera-state.ps1 -RemoveVolumes
+docker compose --project-directory offensive/caldera -f offensive/caldera/docker-compose.yml up -d
+```
 
 Hardening aplicado:
 
@@ -306,9 +390,22 @@ Hardening aplicado:
 - UI/HTTPS/SSH/FTP quedan en loopback por default; los canales de agentes siguen configurables para el laboratorio
 - se corrigió la publicación UDP de `7011`, que antes estaba ambigua/incorrecta
 
+Variables/env relevantes de CALDERA:
+
+- `CALDERA_UI_BIND_IP`, `CALDERA_HTTPS_BIND_IP`: loopback por default
+- `CALDERA_AGENT_BIND_IP`, `CALDERA_DNS_BIND_IP`: abiertos por default para la emulación del laboratorio
+- `CALDERA_SSH_TUNNEL_BIND_IP`, `CALDERA_FTP_BIND_IP`: loopback por default
+
+## Endurecimiento operativo del `ai-orchestrator`
+
+- `ARGOS_CORS_ALLOW_ORIGINS`: lista separada por comas para CORS en `ai-orchestrator/app/main.py`. Si no se define, queda una allowlist local sensata (`localhost`/`127.0.0.1` en puertos típicos) en vez de `*`.
+- Si necesitás compatibilidad amplia para una demo puntual, podés forzar `ARGOS_CORS_ALLOW_ORIGINS=*`.
+- `ARGOS_ALLOWED_NAMESPACES`: lista separada por comas para el policy gate del supervisor. Default: `sandbox,targets,vulnerable-apps`.
+
 ## Limitaciones honestas
 
 - Este cambio NO limpia el historial git previo ni rota secretos ya expuestos fuera del repo.
 - La rotación real sigue siendo una tarea OPERATIVA manual: hay que regenerar localmente los certs de Wazuh y, si corresponde, recrear volúmenes/estado persistente antes de confiar en el entorno renovado.
 - Algunos canales opcionales de CALDERA (FTP/SSH tunnel) quedan con placeholders en `default.yml`; si se usan, el operador debe completarlos en `conf/local.yml`.
 - Si existe un volumen `caldera_conf` previo al saneamiento, puede seguir conteniendo secretos históricos hasta que el operador lo regenere.
+- El helper de CALDERA resetea el estado del compose, pero las credenciales nuevas siguen mostrándose en logs del primer bootstrap; el operador tiene que guardarlas manualmente.

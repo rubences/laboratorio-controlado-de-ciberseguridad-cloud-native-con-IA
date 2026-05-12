@@ -10,6 +10,34 @@ $tetragonValues = Join-Path $repoRoot "infrastructure/k8s/security/tetragon-valu
 $tetragonBaseConfig = Join-Path $repoRoot "infrastructure/k8s/security/tetragon-runtime-observability.yaml"
 $sandboxDir = Join-Path $repoRoot "k8s_platform/sandbox"
 $targetsDir = Join-Path $repoRoot "k8s_platform/targets"
+$defaultIngressManifest = "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.5/deploy/static/provider/kind/deploy.yaml"
+$ingressManifest = if ($env:ARGOS_INGRESS_NGINX_MANIFEST) { $env:ARGOS_INGRESS_NGINX_MANIFEST } else { $defaultIngressManifest }
+$ingressWaitTimeout = if ($env:ARGOS_INGRESS_WAIT_TIMEOUT) { $env:ARGOS_INGRESS_WAIT_TIMEOUT } else { "90s" }
+
+function Resolve-ManifestTarget {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Manifest,
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if ($Manifest -match '^(http|https)://') {
+        return $Manifest
+    }
+
+    $resolvedPath = if ([System.IO.Path]::IsPathRooted($Manifest)) {
+        $Manifest
+    } else {
+        Join-Path $repoRoot $Manifest
+    }
+
+    if (-not (Test-Path -LiteralPath $resolvedPath)) {
+        throw "No existe el manifest configurado para ${Description}: $resolvedPath"
+    }
+
+    return $resolvedPath
+}
 
 function Apply-YamlDirectory {
     param(
@@ -60,10 +88,12 @@ kubectl cluster-info --context kind-$clusterName
 
 # 4. Ingress
 Write-Host "Desplegando NGINX Ingress Controller..." -ForegroundColor Cyan
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+$resolvedIngressManifest = Resolve-ManifestTarget -Manifest $ingressManifest -Description "NGINX Ingress"
+Write-Host "Usando manifest de ingress: $resolvedIngressManifest" -ForegroundColor DarkCyan
+kubectl apply -f $resolvedIngressManifest
 Write-Host "Esperando a que el Ingress Controller esté listo..." -ForegroundColor Cyan
 Start-Sleep -Seconds 10
-kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=90s
+kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=$ingressWaitTimeout
 
 # 5. Stack moderno del scaffold
 Apply-YamlDirectory -DirectoryPath $sandboxDir -Label "sandbox moderno"

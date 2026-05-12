@@ -113,6 +113,18 @@ graph TD
 7. `infrastructure/k8s/security/tetragon-runtime-observability.yaml`
 8. Helm opcional para **Kubescape**, **Falco** y **Tetragon**
 
+### Endurecimiento práctico del bootstrap de ingress
+
+- `deploy-lab.ps1` dejó de depender por default del `main` remoto mutable de `ingress-nginx`.
+- Ahora usa por default un manifest pinneado a `controller-v1.11.5` para Kind.
+- Si necesitás otra release o un manifest interno/local, podés setear:
+
+```powershell
+$env:ARGOS_INGRESS_NGINX_MANIFEST = "C:\ruta\a\ingress-nginx-kind.yaml"
+$env:ARGOS_INGRESS_WAIT_TIMEOUT = "180s"
+./deploy-lab.ps1
+```
+
 ## 🔀 Modos de ejecución del endpoint `POST /api/v1/scans/start`
 
 ### Modo `scaffold` (default)
@@ -186,10 +198,10 @@ PERO no se presenta falsamente como una tubería productiva completa de respuest
    - `API_PASSWORD`
    - `DASHBOARD_PASSWORD`
 3. Si necesitás cambiar nombres/IPs para SANs, editá `infrastructure/wazuh/config/certs.yml` ANTES de generar.
-4. Regenerá certificados localmente:
+4. Regenerá certificados localmente con el helper:
 
 ```powershell
-docker compose -f infrastructure/wazuh/generate-certs.yml run --rm generator
+./scripts/bootstrap-wazuh-tls.ps1
 ```
 
 5. Copiá `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml.example` a `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml`.
@@ -210,11 +222,28 @@ docker compose -f infrastructure/wazuh/docker-compose.yml up -d
 
 ### Rotación recomendada de Wazuh
 
-1. `docker compose -f infrastructure/wazuh/docker-compose.yml down`
-2. borrar localmente los PEM/KEY generados en `infrastructure/wazuh/config/wazuh_indexer_ssl_certs/`
-3. volver a correr `generate-certs.yml`
-4. levantar el stack otra vez
-5. si necesitás una reemisión limpia de CA + estado, recreá manualmente los volúmenes persistentes antes del siguiente `up`
+1. Rotación de certs sin tocar volúmenes:
+
+```powershell
+./scripts/reset-wazuh-state.ps1 -RemoveCerts
+./scripts/bootstrap-wazuh-tls.ps1
+```
+
+2. Rotación limpia de certs + estado persistente:
+
+```powershell
+./scripts/reset-wazuh-state.ps1 -RemoveCerts -RemoveVolumes
+./scripts/bootstrap-wazuh-tls.ps1
+```
+
+3. Luego levantá Wazuh otra vez con su compose.
+
+### Variables/env relevantes de Wazuh
+
+- `INDEXER_PASSWORD`, `API_PASSWORD`, `DASHBOARD_PASSWORD`
+- `WAZUH_INDEXER_BIND_IP`, `WAZUH_API_BIND_IP`, `WAZUH_DASHBOARD_BIND_IP`
+- `WAZUH_INGEST_BIND_IP`, `WAZUH_SYSLOG_BIND_IP`
+- `WAZUH_DASHBOARD_CONFIG_PATH`
 
 ## 🔐 Bootstrap seguro de CALDERA
 
@@ -229,7 +258,12 @@ docker compose -f offensive/caldera/docker-compose.yml up -d
 4. Guardá las credenciales/API keys mostradas en logs del primer bootstrap.
 5. Evitá `--insecure`; si lo usás, `conf/default.yml` ya NO contiene secretos reales y requiere reemplazo manual de placeholders.
 6. Si configurás un certificado HTTPS propio, mantenelo como artefacto local/no versionado en `conf/local.yml` o en un volumen persistente.
-7. Si ya existía `caldera_conf`, eliminá/regenerá ese volumen para descartar secretos heredados.
+7. Si ya existía `caldera_conf`, usá el helper para descartar secretos heredados:
+
+```powershell
+./scripts/reset-caldera-state.ps1 -RemoveVolumes
+docker compose --project-directory offensive/caldera -f offensive/caldera/docker-compose.yml up -d
+```
 
 ### Hardening aplicado en CALDERA
 
@@ -239,12 +273,82 @@ docker compose -f offensive/caldera/docker-compose.yml up -d
 - `7011` ahora se publica explícitamente como UDP
 - se agrega `caldera_conf` para persistir `conf/local.yml` generado automáticamente
 
+### Variables/env relevantes de CALDERA
+
+- `CALDERA_UI_BIND_IP`
+- `CALDERA_HTTPS_BIND_IP`
+- `CALDERA_AGENT_BIND_IP`
+- `CALDERA_DNS_BIND_IP`
+- `CALDERA_SSH_TUNNEL_BIND_IP`
+- `CALDERA_FTP_BIND_IP`
+
+## ✅ Smoke checks runtime/preflight de Docker
+
+Para no adivinar si el operador dejó algo a medias, el repo ahora trae smoke checks PowerShell reutilizables para Wazuh y CALDERA.
+
+### Scripts
+
+```powershell
+./scripts/check-runtime-smoke.ps1
+./scripts/check-wazuh-runtime-smoke.ps1
+./scripts/check-caldera-runtime-smoke.ps1
+```
+
+### Modos operativos
+
+- `-Mode Precheck`: solo archivos/config/render de Compose. Ideal antes de `up -d`.
+- `-Mode Auto`: precheck + runtime solo si detecta contenedores corriendo.
+- `-Mode Runtime`: trata la ausencia del stack como problema y valida contenedores/puertos.
+
+### Ejemplos
+
+```powershell
+./scripts/check-runtime-smoke.ps1 -Mode Precheck
+./scripts/check-runtime-smoke.ps1 -Stack Wazuh -Mode Runtime
+./scripts/check-runtime-smoke.ps1 -Stack Caldera -Mode Auto
+```
+
+### Cobertura
+
+- **Wazuh**: `.env`, secretos vacíos, `wazuh.local.yml`, placeholder pendiente, certs requeridos, `docker compose config`, servicios esperados, `8444`, `55000` y reporte opcional de `9200`.
+- **CALDERA**: compose, `.env` opcional, `docker compose config`, servicio/contenedor esperado, `8889`, GET HTTP básico en `8889` y reporte opcional de `8443`, `7010`, `7011/udp`, `7012`, `8853`.
+
+Los scripts emiten mensajes `OK`, `WARN` y `FAIL` diferenciando PRECHECK vs RUNTIME para que un stack apagado no rompa el flujo cuando solo querés validar bootstrap.
+
+## 🔐 Hardening práctico del `ai-orchestrator`
+
+### CORS con allowlist configurable
+
+- `ai-orchestrator/app/main.py` ya no queda con `allow_origins=["*"]` por default.
+- Default nuevo: allowlist local para `localhost` y `127.0.0.1` en puertos típicos de demo.
+- Override por env:
+
+```powershell
+$env:ARGOS_CORS_ALLOW_ORIGINS = "http://localhost:3000,http://127.0.0.1:5173"
+```
+
+- Si de verdad necesitás apertura total temporal para una demo cerrada:
+
+```powershell
+$env:ARGOS_CORS_ALLOW_ORIGINS = "*"
+```
+
+### Policy gate más estructurado
+
+`ai-orchestrator/app/agents/supervisor.py` ahora centraliza checks base para:
+
+- namespace permitido (`ARGOS_ALLOWED_NAMESPACES`, default `sandbox,targets,vulnerable-apps`)
+- herramientas soportadas (`burp`, `kubescape`, `neurosploit`, `nmap_safe`)
+- requests vacíos de herramientas
+- patrones de texto ligados a acceso de configuración/secrets, destrucción o salida de scope
+
 ## ⚠️ Limitaciones y mitigaciones
 
 - Esto NO rota secretos históricos ni limpia el historial git previo.
 - Si los certificados de Wazuh ya fueron compartidos fuera del repo, hay que regenerarlos localmente y evaluar recreación de volúmenes/estado antes de volver a confiar en el stack.
 - CALDERA sigue permitiendo modos inseguros upstream (`--insecure`); la mitigación en este repo es dejar esa vía SIN secretos reales preconfigurados y documentarla como excepción.
 - Un volumen `caldera_conf` viejo puede seguir reteniendo credenciales previas hasta que el operador lo recree.
+- El policy gate del runtime legacy sigue siendo heurístico; esto lo hace más ordenado y menos laxo, pero NO lo convierte mágicamente en enforcement de producción.
 
 ## 🧹 Limpieza del Entorno
 
