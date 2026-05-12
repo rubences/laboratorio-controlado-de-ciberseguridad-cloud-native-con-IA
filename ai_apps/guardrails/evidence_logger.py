@@ -18,7 +18,7 @@ class EvidenceLogger:
             **payload,
             "stored_at": timestamp,
             "evidence_path": str(relative_path).replace("\\", "/"),
-            "execution_mode": "scaffold-mock-adapters",
+            "execution_mode": payload.get("execution_mode", "scaffold"),
         }
         evidence_file.write_text(
             json.dumps(enriched_payload, indent=2, ensure_ascii=False),

@@ -1,13 +1,11 @@
 import logging
 from typing import TypedDict, Annotated
 import operator
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_ollama import ChatOllama
-from langgraph.graph import StateGraph, START, END
 from ...mcp_client import mcp_client
+from ...runtime_compat import HumanMessage, LANGGRAPH_AVAILABLE, START, END, StateGraph, SystemMessage, build_chat_model
 
 logger = logging.getLogger("hexstrike.subagent.security")
-llm = ChatOllama(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.1)
+llm = build_chat_model(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.1)
 
 class SecuritySubagentState(TypedDict):
     task: str
@@ -109,6 +107,9 @@ Findings: {state["findings"]}"""
     return {"messages": ["Evaluation complete. No findings to analyze."]}
 
 def build_security_subagent():
+    if not LANGGRAPH_AVAILABLE:
+        return _FallbackSecuritySubagent()
+
     graph = StateGraph(SecuritySubagentState)
     graph.add_node("execute_tools", tool_execution_node)
     graph.add_node("verify", anti_hallucination_node)
@@ -120,3 +121,22 @@ def build_security_subagent():
     graph.add_edge("evaluate", END)
     
     return graph.compile()
+
+
+class _FallbackSecuritySubagent:
+    async def ainvoke(self, initial_state: SecuritySubagentState) -> SecuritySubagentState:
+        state = dict(initial_state)
+        for node in (tool_execution_node, anti_hallucination_node, evaluator_node):
+            updates = await node(state)
+            state = _merge_state(state, updates)
+        return state
+
+
+def _merge_state(state: dict, updates: dict) -> SecuritySubagentState:
+    merged = dict(state)
+    for key, value in updates.items():
+        if key in {"messages", "findings", "raw_results"} and isinstance(value, list):
+            merged[key] = [*merged.get(key, []), *value]
+        else:
+            merged[key] = value
+    return merged

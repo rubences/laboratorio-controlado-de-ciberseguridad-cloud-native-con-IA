@@ -1,5 +1,4 @@
-# Plantilla segura de referencia. No se monta por defecto.
-# Copiala a `wazuh.local.yml` y reemplazá el placeholder antes de levantar Docker Compose.
+# Copiá este archivo a `wazuh.local.yml` y reemplazá el placeholder por la contraseña real del usuario API.
 hosts:
   - default:
       url: https://wazuh.manager

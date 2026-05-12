@@ -1,0 +1,72 @@
+{
+  "scan_id": "scan-63e5e8e797fb",
+  "status": "accepted",
+  "message": "Scaffold execution completed with mock MCP adapters and persisted evidence.",
+  "requested_model": "hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning",
+  "scan_name": "baseline-lab-scan",
+  "requestor": "verify-scaffold",
+  "target": "juiceshop.targets.svc.cluster.local",
+  "target_namespace": "targets",
+  "approval_required": true,
+  "policy": {
+    "allowed": true,
+    "matched_rule": "allowed_dns_pattern",
+    "reason": "host 'juiceshop.targets.svc.cluster.local' matches an approved laboratory DNS pattern"
+  },
+  "discovery": {
+    "input_target": "juiceshop.targets.svc.cluster.local",
+    "normalized_target": "juiceshop.targets.svc.cluster.local",
+    "target_type": "dns",
+    "resolved_host": "juiceshop.targets.svc.cluster.local",
+    "resolved_port": 80,
+    "target_namespace": "targets",
+    "notes": [
+      "Scaffold discovery only normalizes the target.",
+      "DNS resolution and active probing are intentionally deferred.",
+      "Detected Kubernetes service DNS naming convention."
+    ]
+  },
+  "tool_runs": [
+    {
+      "tool": "burp",
+      "status": "mocked",
+      "adapter_mode": "scaffold-mock",
+      "scan_id": "scan-63e5e8e797fb",
+      "requested_model": "hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning",
+      "summary": "Mock passive web enumeration prepared for the discovered target.",
+      "findings": [
+        {
+          "id": "burp-mock-001",
+          "severity": "info",
+          "title": "Passive route census placeholder",
+          "detail": "Prepared a passive crawl plan for juiceshop.targets.svc.cluster.local:80 without launching a real Burp scan."
+        }
+      ]
+    }
+  ],
+  "execution_mode": "scaffold",
+  "execution_details": {
+    "requested_mode": null,
+    "requested_profile": null,
+    "resolved_mode": "scaffold",
+    "bridge_used": false,
+    "bridge_path": null,
+    "runtime": "ai_apps",
+    "runtime_entrypoint": "ai_apps/agents/orchestrator.py:ScanOrchestrator._run_scaffold_mode",
+    "adapter_strategy": "in-process scaffold mock adapters"
+  },
+  "finding_sources": [
+    {
+      "mode": "scaffold",
+      "runtime": "ai_apps",
+      "source": "ai_apps.mcp_clients.burp_client",
+      "finding_origin": "scaffold_mock_adapter"
+    }
+  ],
+  "limitations": [
+    "Scaffold mode uses explicit mock adapters for Burp and NeuroSploit.",
+    "Discovery is normalization-only and does not perform real probing or DNS resolution."
+  ],
+  "stored_at": "20260512T104254Z",
+  "evidence_path": "evidence/scaffold/scans/20260512T104254Z_scan-63e5e8e797fb.json"
+}

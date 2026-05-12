@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .env
 *.env
+**/*.local.yml
 venv/
 *.egg-info/
 *.key
@@ -21,3 +22,4 @@ generated-certs/
 !**/*template*.key
 !**/*.example
 !**/*.example.*
+!**/*.local.yml.example

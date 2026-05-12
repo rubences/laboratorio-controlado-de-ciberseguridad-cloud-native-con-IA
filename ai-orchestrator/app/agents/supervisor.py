@@ -1,14 +1,12 @@
 import logging
 import asyncio
 from typing import TypedDict, Literal
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_ollama import ChatOllama
-from langgraph.graph import StateGraph, START, END
 from .subagents.security_agent import build_security_subagent
 from ..mcp_client import mcp_client
+from ..runtime_compat import HumanMessage, LANGGRAPH_AVAILABLE, START, END, StateGraph, SystemMessage, build_chat_model
 
 logger = logging.getLogger("hexstrike.supervisor")
-llm = ChatOllama(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.2)
+llm = build_chat_model(model="hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning", temperature=0.2)
 
 class SupervisorState(TypedDict):
     task: str
@@ -98,6 +96,9 @@ def route_after_policy(state: SupervisorState) -> Literal["planner", "__end__"]:
     return "planner"
 
 def build_supervisor_graph():
+    if not LANGGRAPH_AVAILABLE:
+        raise RuntimeError("LangGraph is not available in this environment")
+
     workflow = StateGraph(SupervisorState)
     
     workflow.add_node("policy_gate", policy_gate_node)
@@ -116,7 +117,6 @@ def build_supervisor_graph():
     return workflow.compile()
 
 async def run_supervisor_workflow(task: str, namespace: str, tools: list[str], require_approval: bool = False) -> dict:
-    graph = build_supervisor_graph()
     initial_state = SupervisorState(
         task=task,
         namespace=namespace,
@@ -126,8 +126,12 @@ async def run_supervisor_workflow(task: str, namespace: str, tools: list[str], r
         status="running",
         require_approval=require_approval
     )
-    
-    final_state = await graph.ainvoke(initial_state)
+
+    if LANGGRAPH_AVAILABLE:
+        graph = build_supervisor_graph()
+        final_state = await graph.ainvoke(initial_state)
+    else:
+        final_state = await _run_supervisor_fallback(initial_state)
     
     if final_state.get("status", "").startswith("error"):
         return {
@@ -140,3 +144,25 @@ async def run_supervisor_workflow(task: str, namespace: str, tools: list[str], r
         "total_findings": len(final_state.get("subagent_findings", [])),
         "details": final_state.get("subagent_findings", [])
     }
+
+
+async def _run_supervisor_fallback(initial_state: SupervisorState) -> SupervisorState:
+    state = dict(initial_state)
+    for node in (policy_gate_node,):
+        state = _merge_state(state, await node(state))
+    if route_after_policy(state) == "__end__":
+        return state
+
+    for node in (planner_node, delegate_to_security_agent, human_approval_node, soc_reporting_node):
+        state = _merge_state(state, await node(state))
+    return state
+
+
+def _merge_state(state: dict, updates: dict) -> SupervisorState:
+    merged = dict(state)
+    for key, value in updates.items():
+        if key == "subagent_findings" and isinstance(value, list):
+            merged[key] = value
+        else:
+            merged[key] = value
+    return merged

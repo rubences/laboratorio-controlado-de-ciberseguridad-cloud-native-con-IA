@@ -1,0 +1,119 @@
+{
+  "scan_id": "scan-3b05408b672a",
+  "status": "accepted",
+  "message": "Legacy bridge executed in-process through ai-orchestrator. Results below come from the experimental LangGraph runtime and keep its limitations explicit.",
+  "requested_model": "hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning",
+  "scan_name": "baseline-lab-scan",
+  "requestor": "verify-legacy",
+  "target": "juiceshop.targets.svc.cluster.local",
+  "target_namespace": "targets",
+  "approval_required": false,
+  "policy": {
+    "allowed": true,
+    "matched_rule": "allowed_dns_pattern",
+    "reason": "host 'juiceshop.targets.svc.cluster.local' matches an approved laboratory DNS pattern"
+  },
+  "discovery": {
+    "input_target": "juiceshop.targets.svc.cluster.local",
+    "normalized_target": "juiceshop.targets.svc.cluster.local",
+    "target_type": "dns",
+    "resolved_host": "juiceshop.targets.svc.cluster.local",
+    "resolved_port": 80,
+    "target_namespace": "targets",
+    "notes": [
+      "Scaffold discovery only normalizes the target.",
+      "DNS resolution and active probing are intentionally deferred.",
+      "Detected Kubernetes service DNS naming convention."
+    ]
+  },
+  "tool_runs": [
+    {
+      "tool": "burp_suite",
+      "status": "verified",
+      "adapter_mode": "legacy-bridge",
+      "finding_origin": "ai-orchestrator",
+      "summary": "Legacy Burp path mapped 3 routes through the ai-orchestrator mock MCP flow.",
+      "verification": {
+        "verified": true,
+        "confidence": 0.95
+      },
+      "raw_result": {
+        "status": "success",
+        "routes": [
+          "/",
+          "/login",
+          "/api/products"
+        ],
+        "evidence": {
+          "login_form": "<form action=\"/login\" method=\"post\"><input name=\"email\" /><input name=\"password\" /></form>",
+          "products_api": "/api/products"
+        },
+        "description": "Initial web mapping completed using Burp Suite MCP."
+      }
+    },
+    {
+      "tool": "neurosploit_v3",
+      "status": "verified",
+      "adapter_mode": "legacy-bridge",
+      "finding_origin": "ai-orchestrator",
+      "summary": "Legacy NeuroSploit path reported exploit workflow output through the experimental bridge.",
+      "verification": {
+        "verified": true,
+        "confidence": 0.95
+      },
+      "raw_result": {
+        "status": "success",
+        "exploit_status": "session_opened",
+        "target": "targets"
+      }
+    }
+  ],
+  "execution_mode": "legacy_bridge",
+  "execution_details": {
+    "requested_mode": "legacy_bridge",
+    "resolved_mode": "legacy_bridge",
+    "bridge_used": true,
+    "bridge_path": "in_process",
+    "runtime": "ai-orchestrator",
+    "runtime_entrypoint": "ai-orchestrator/app/agents/supervisor.py:run_supervisor_workflow",
+    "mcp_initialization": "ai-orchestrator/app/mcp_client.py:ArgosMCPClient.initialize",
+    "legacy_status": "completed",
+    "legacy_total_findings": 2,
+    "legacy_result": {
+      "status": "completed",
+      "total_findings": 2,
+      "details": [
+        {
+          "tool": "burp_suite",
+          "result": "{\"status\": \"success\", \"routes\": [\"/\", \"/login\", \"/api/products\"], \"evidence\": {\"login_form\": \"<form action=\\\"/login\\\" method=\\\"post\\\"><input name=\\\"email\\\" /><input name=\\\"password\\\" /></form>\", \"products_api\": \"/api/products\"}, \"description\": \"Initial web mapping completed using Burp Suite MCP.\"}",
+          "confidence": 0.95,
+          "verified": true
+        },
+        {
+          "tool": "neurosploit_v3",
+          "result": "{\"status\": \"success\", \"exploit_status\": \"session_opened\", \"target\": \"targets\"}",
+          "confidence": 0.95,
+          "verified": true
+        }
+      ]
+    },
+    "scan_id": "scan-3b05408b672a",
+    "policy_rule": "allowed_dns_pattern"
+  },
+  "finding_sources": [
+    {
+      "mode": "legacy_bridge",
+      "runtime": "ai-orchestrator",
+      "bridge_path": "in_process",
+      "source": "app.agents.supervisor.run_supervisor_workflow",
+      "total_findings": 2
+    }
+  ],
+  "limitations": [
+    "Legacy runtime remains experimental and depends on ai-orchestrator LangGraph components.",
+    "Legacy MCP tool calls are still mocked/simulated in several paths; findings are not a production-grade scan.",
+    "Human approval in the legacy runtime is simulated with a timed pause, not a real operator workflow."
+  ],
+  "stored_at": "20260512T104259Z",
+  "evidence_path": "evidence/scaffold/scans/20260512T104259Z_scan-3b05408b672a.json"
+}
