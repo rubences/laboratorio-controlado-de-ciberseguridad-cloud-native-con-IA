@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server
+  namespace: sandbox
+  labels:
+    app.kubernetes.io/name: mcp-server
+    app.kubernetes.io/component: adapter
+    fdtn.ai/scaffold: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-server
+        fdtn.ai/scaffold: "true"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: mcp-server
+          image: hashicorp/http-echo:1.0.0
+          args:
+            - "-text=MCP scaffold adapter ready"
+          ports:
+            - containerPort: 5678
+          env:
+            - name: FOUNDATION_MODEL_REFERENCE
+              value: hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-server
+  namespace: sandbox
+  labels:
+    app.kubernetes.io/name: mcp-server
+spec:
+  selector:
+    app.kubernetes.io/name: mcp-server
+  ports:
+    - name: http
+      port: 5678
+      targetPort: 5678

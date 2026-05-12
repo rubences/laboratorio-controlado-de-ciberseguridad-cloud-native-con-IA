@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neurosploit
+  namespace: sandbox
+  labels:
+    app.kubernetes.io/name: neurosploit
+    app.kubernetes.io/component: offensive-safety
+    fdtn.ai/scaffold: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: neurosploit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: neurosploit
+        fdtn.ai/scaffold: "true"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: neurosploit
+          image: hashicorp/http-echo:1.0.0
+          args:
+            - "-text=NeuroSploit mock adapter available"
+          ports:
+            - containerPort: 8090
+          env:
+            - name: ADAPTER_MODE
+              value: mock
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neurosploit
+  namespace: sandbox
+spec:
+  selector:
+    app.kubernetes.io/name: neurosploit
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090

@@ -1,0 +1,8 @@
+# Namespace base para los componentes de sandbox/control.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox
+  labels:
+    app.kubernetes.io/part-of: controlled-cyber-lab
+    fdtn.ai/scope: sandbox

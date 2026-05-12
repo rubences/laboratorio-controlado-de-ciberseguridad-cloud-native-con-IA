@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juiceshop
+  namespace: targets
+  labels:
+    app.kubernetes.io/name: juiceshop
+    app.kubernetes.io/component: vulnerable-target
+    fdtn.ai/scaffold: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: juiceshop
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: juiceshop
+        fdtn.ai/scaffold: "true"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: juiceshop
+          image: bkimminich/juice-shop:v17.1.1
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: juiceshop
+  namespace: targets
+spec:
+  selector:
+    app.kubernetes.io/name: juiceshop
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000

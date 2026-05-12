@@ -1,0 +1,8 @@
+# Namespace para objetivos deliberadamente vulnerables del laboratorio.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: targets
+  labels:
+    app.kubernetes.io/part-of: controlled-cyber-lab
+    fdtn.ai/scope: targets
