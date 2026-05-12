@@ -33,6 +33,7 @@ kubectl cluster-info --context kind-$clusterName
 Write-Host "Desplegando NGINX Ingress Controller..." -ForegroundColor Cyan
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 Write-Host "Esperando a que el Ingress Controller esté listo..." -ForegroundColor Cyan
+Start-Sleep -Seconds 10
 kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=90s
 
 # 5. Apps Vulnerables

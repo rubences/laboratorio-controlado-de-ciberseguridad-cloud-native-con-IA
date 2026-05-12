@@ -8,7 +8,7 @@ services:
       - "9200:9200"
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g -XX:MaxDirectMemorySize=1g"
-      - INDEXER_PASSWORD=admin
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
     ulimits:
       memlock:
         soft: -1
@@ -38,13 +38,13 @@ services:
     environment:
       - INDEXER_URL=https://wazuh.indexer:9200
       - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=admin
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
       - FILEBEAT_SSL_VERIFICATION_MODE=full
       - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
       - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
       - SSL_KEY=/etc/ssl/filebeat.key
       - API_USERNAME=wazuh-wui
-      - API_PASSWORD=ArgosSecure#2026!
+      - API_PASSWORD=${API_PASSWORD:-ArgosSecure#2026!}
     volumes:
       - wazuh-api-configuration:/var/ossec/api/configuration
       - wazuh-etc:/var/ossec/etc
@@ -73,12 +73,12 @@ services:
       - "8444:5601"
     environment:
       - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=admin
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
       - WAZUH_API_URL=https://wazuh.manager
       - DASHBOARD_USERNAME=kibanaserver
-      - DASHBOARD_PASSWORD=kibanaserver
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-kibanaserver}
       - API_USERNAME=wazuh-wui
-      - API_PASSWORD=ArgosSecure#2026!
+      - API_PASSWORD=${API_PASSWORD:-ArgosSecure#2026!}
     volumes:
       - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem
       - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem
