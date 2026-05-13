@@ -440,6 +440,7 @@ if ($falcosidekickLogs.Text -match 'Syslog - dial udp|i/o timeout|lookup wazuh\.
 
 Write-Step 'Recolectando evidencia de Wazuh'
 $wazuhAlerts = Invoke-DockerRaw -Arguments @('exec', $WazuhContainerName, 'sh', '-c', 'tail -n 500 /var/ossec/logs/alerts/alerts.json') -AllowFailure
+Save-TextFile -Path (Join-Path $runDirectory 'wazuh-alerts-tail.jsonl') -Content $wazuhAlerts.Text
 $wazuhMatches = @(Select-WazuhAlertLines -Lines $wazuhAlerts.Lines -TargetPodName $targetPodName -StartedAtUtc $startedAtUtc)
 Save-TextFile -Path (Join-Path $runDirectory 'wazuh-alerts.jsonl') -Content ($wazuhMatches -join [Environment]::NewLine)
 $summary.evidence.wazuh_matches = $wazuhMatches.Count
@@ -486,6 +487,7 @@ $actionsSection
 ## Evidence files
 - falco-alerts.jsonl -> $($summary.evidence.falco_matches) match(es)
 - tetragon-process-events.jsonl -> $($summary.evidence.tetragon_matches) match(es)
+- wazuh-alerts-tail.jsonl
 - wazuh-alerts.jsonl -> $($summary.evidence.wazuh_matches) match(es)
 - target-process-command.txt
 - target-shadow-command.txt
