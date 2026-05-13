@@ -209,6 +209,7 @@ PERO no se presenta falsamente como una tubería productiva completa de respuest
    - `INDEXER_PASSWORD`
    - `API_PASSWORD`
    - `DASHBOARD_PASSWORD`
+   - OJO: evitá `&` dentro de `INDEXER_PASSWORD` mientras este stack siga dependiendo del rewrite automático de Filebeat en `wazuh-manager`; hoy ese entrypoint rompe la credencial final.
 3. Si necesitás cambiar nombres/IPs para SANs, editá `infrastructure/wazuh/config/certs.yml` ANTES de generar.
 4. Regenerá certificados localmente con el helper:
 
@@ -218,7 +219,9 @@ PERO no se presenta falsamente como una tubería productiva completa de respuest
 
 5. Copiá `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml.example` a `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml`.
 6. Reemplazá `__SET_WAZUH_API_PASSWORD__` por el mismo valor que `API_PASSWORD`.
-7. Recién ahí levantá el stack:
+7. Creá `infrastructure/wazuh/config/wazuh_dashboard/opensearch_dashboards.local.yml` a partir de `opensearch_dashboards.yml`, dejando usuario/password reales dentro del archivo local; OpenSearch Dashboards NO reemplaza `${ENV_VAR}` en ese YAML montado.
+8. Definí `WAZUH_OPENSEARCH_DASHBOARDS_CONFIG_PATH` en `infrastructure/wazuh/.env` apuntando a ese archivo local.
+9. Recién ahí levantá el stack:
 
 ```powershell
 docker compose -f infrastructure/wazuh/docker-compose.yml up -d
@@ -230,6 +233,7 @@ docker compose -f infrastructure/wazuh/docker-compose.yml up -d
 - los puertos de ingesta (`1514`, `1515`, `514/udp`) siguen abiertos por default para no romper el laboratorio, pero ahora son configurables por `*_BIND_IP`
 - Docker Compose exige secretos explícitos y ya NO cae en credenciales débiles por fallback
 - `wazuh.yml` dejó de tener YAML duplicado/ambiguo y pasó a ser plantilla saneada
+- el mount de `wazuh.local.yml` pasa a solo lectura para que el dashboard no mutile el archivo local y no reintroduzca claves YAML duplicadas
 - los PEM/KEY reales salen del control de versiones y pasan a regenerarse localmente
 
 ### Rotación recomendada de Wazuh
@@ -255,6 +259,7 @@ docker compose -f infrastructure/wazuh/docker-compose.yml up -d
 - `INDEXER_PASSWORD`, `API_PASSWORD`, `DASHBOARD_PASSWORD`
 - `WAZUH_INDEXER_BIND_IP`, `WAZUH_API_BIND_IP`, `WAZUH_DASHBOARD_BIND_IP`
 - `WAZUH_INGEST_BIND_IP`, `WAZUH_SYSLOG_BIND_IP`
+- `WAZUH_OPENSEARCH_DASHBOARDS_CONFIG_PATH`
 - `WAZUH_DASHBOARD_CONFIG_PATH`
 
 ## 🔐 Bootstrap seguro de CALDERA

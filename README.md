@@ -376,7 +376,7 @@ La salida mantiene el mismo contrato visual: `OK`, `WARN` y `FAIL`, pensado para
 ### Wazuh
 
 1. Copiá `infrastructure/wazuh/.env.example` a `infrastructure/wazuh/.env`.
-2. Completá `INDEXER_PASSWORD`, `API_PASSWORD` y `DASHBOARD_PASSWORD` con secretos fuertes.
+2. Completá `INDEXER_PASSWORD`, `API_PASSWORD` y `DASHBOARD_PASSWORD` con secretos fuertes. En el estado actual de la imagen de `wazuh-manager`, evitá `&` específicamente en `INDEXER_PASSWORD`: el entrypoint de Filebeat la reescribe mal y termina rompiendo la auth contra el indexer.
 3. Si tu topología local cambia, ajustá `infrastructure/wazuh/config/certs.yml` ANTES de regenerar certificados.
 4. Regenerá el material TLS localmente con el helper del repo:
 
@@ -386,8 +386,10 @@ La salida mantiene el mismo contrato visual: `OK`, `WARN` y `FAIL`, pensado para
 
 5. Copiá `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml.example` a `infrastructure/wazuh/config/wazuh_dashboard/wazuh.local.yml`.
 6. Reemplazá `__SET_WAZUH_API_PASSWORD__` por el mismo valor que uses en `API_PASSWORD`.
-7. Si necesitás exponer más que localhost, cambiá los `*_BIND_IP` en `infrastructure/wazuh/.env` de forma EXPLÍCITA.
-8. Recién ahí levantá el stack Wazuh con `docker compose -f infrastructure/wazuh/docker-compose.yml up -d`.
+7. Creá además `infrastructure/wazuh/config/wazuh_dashboard/opensearch_dashboards.local.yml` a partir de `opensearch_dashboards.yml`, reemplazando `opensearch.username` y `opensearch.password` por valores reales; OpenSearch Dashboards NO interpola esos `${ENV_VAR}` dentro del archivo montado.
+8. Apuntá `WAZUH_OPENSEARCH_DASHBOARDS_CONFIG_PATH` en `infrastructure/wazuh/.env` al archivo local sensible recién creado.
+9. Si necesitás exponer más que localhost, cambiá los `*_BIND_IP` en `infrastructure/wazuh/.env` de forma EXPLÍCITA.
+10. Recién ahí levantá el stack Wazuh con `docker compose -f infrastructure/wazuh/docker-compose.yml up -d`.
 
 Bridge honesto Falco -> Wazuh en este entorno:
 
@@ -401,6 +403,8 @@ Hardening aplicado:
 - ya NO quedan defaults sensibles funcionales en archivos trackeados críticos
 - `9200`, `55000` y `8444` quedan atados a loopback por default
 - el dashboard monta `wazuh.local.yml` en vez de un archivo trackeado con secreto duro
+- el dashboard puede montar también un `opensearch_dashboards.local.yml` local para evitar credenciales reales en el archivo versionado
+- el mount de `wazuh.local.yml` pasa a solo lectura para que el dashboard no reescriba el archivo local y no vuelva a introducir YAML duplicado
 - si faltan secretos, Docker Compose falla temprano en vez de arrancar con credenciales débiles
 - los PEM/KEY del indexer/manager/dashboard dejan de versionarse y pasan a ser artefactos locales regenerables
 
@@ -428,6 +432,7 @@ Variables/env relevantes de Wazuh:
 - `INDEXER_USERNAME`, `API_USERNAME`, `DASHBOARD_USERNAME`: opcionales si necesitás override local
 - `WAZUH_INDEXER_BIND_IP`, `WAZUH_API_BIND_IP`, `WAZUH_DASHBOARD_BIND_IP`: exposición loopback por default
 - `WAZUH_INGEST_BIND_IP`, `WAZUH_SYSLOG_BIND_IP`: mantienen puertos de ingesta/sislog abiertos para el laboratorio, pero podés cerrarlos más si tu demo no los necesita
+- `WAZUH_OPENSEARCH_DASHBOARDS_CONFIG_PATH`: override opcional del config local sensible de OpenSearch Dashboards
 - `WAZUH_DASHBOARD_CONFIG_PATH`: override opcional del archivo local montado en dashboard
 
 ### CALDERA
