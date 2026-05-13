@@ -7,6 +7,8 @@ param(
 
     [string]$TetragonNamespace = 'tetragon',
 
+    [string]$WazuhContainerName = 'wazuh.manager',
+
     [string]$EvidenceDirectory = 'evidence/runtime-detection',
 
     [switch]$SkipShadowRead
@@ -98,6 +100,62 @@ function Invoke-KubectlJson {
     return $result.Text | ConvertFrom-Json
 }
 
+function Invoke-DockerRaw {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+
+        [switch]$AllowFailure
+    )
+
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = 'docker'
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+
+    $escapedArguments = @()
+    foreach ($argument in $Arguments) {
+        $safeArgument = $argument.Replace('"', '\"')
+        if ($safeArgument -match '\s' -or $safeArgument -match '"') {
+            $escapedArguments += '"' + $safeArgument + '"'
+        } else {
+            $escapedArguments += $safeArgument
+        }
+    }
+
+    $startInfo.Arguments = $escapedArguments -join ' '
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+
+    $lines = @()
+    if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+        $lines += @($stdout -split "`r?`n" | Where-Object { $_ -ne '' })
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+        $lines += @($stderr -split "`r?`n" | Where-Object { $_ -ne '' })
+    }
+
+    $exitCode = [int]$process.ExitCode
+    if (-not $AllowFailure -and $exitCode -ne 0) {
+        throw "docker $($Arguments -join ' ') falló con exit code $exitCode -> $($lines -join ' | ')"
+    }
+
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Lines    = $lines
+        Text     = ($lines -join [Environment]::NewLine)
+    }
+}
+
 function Get-SinglePodByLabel {
     param(
         [Parameter(Mandatory = $true)]
@@ -121,6 +179,24 @@ function Get-SinglePodByLabel {
     }
 
     return $items[0]
+}
+
+function Convert-ToUtcDateTime {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $null
+    }
+
+    try {
+        return ([DateTimeOffset]::Parse($Value)).UtcDateTime
+    } catch {
+        return $null
+    }
 }
 
 function Save-TextFile {
@@ -177,8 +253,88 @@ function Select-TetragonTargetLines {
     return @($selected)
 }
 
+function Select-WazuhAlertLines {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Lines,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetPodName,
+
+        [Parameter(Mandatory = $true)]
+        [datetime]$StartedAtUtc
+    )
+
+    $selected = New-Object System.Collections.Generic.List[string]
+    $windowStartUtc = $StartedAtUtc.AddMinutes(-2)
+
+    foreach ($line in $Lines) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+
+        try {
+            $event = $line | ConvertFrom-Json
+        } catch {
+            continue
+        }
+
+        $rawLog = [string]$event.full_log
+        $ruleId = if ($event.PSObject.Properties['rule']) { [string]$event.rule.id } else { '' }
+        $falcoTimeValue = if ($event.PSObject.Properties['data']) { [string]$event.data.falco_time } else { '' }
+        $ingestUtc = Convert-ToUtcDateTime -Value ([string]$event.timestamp)
+        $falcoUtc = Convert-ToUtcDateTime -Value $falcoTimeValue
+        $hasTargetPod = $rawLog -match [Regex]::Escape($TargetPodName)
+        $hasFalcoSignal = $ruleId -in @('110000', '110001', '110003') -or $rawLog -match 'falcosidekick:'
+        $isInWindow = ($null -ne $ingestUtc -and $ingestUtc -ge $windowStartUtc) -or ($null -ne $falcoUtc -and $falcoUtc -ge $windowStartUtc)
+
+        if ($hasTargetPod -and $hasFalcoSignal -and $isInWindow) {
+            $selected.Add($line)
+        }
+    }
+
+    return @($selected)
+}
+
+function Get-WazuhCorrelation {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Lines
+    )
+
+    foreach ($line in $Lines) {
+        try {
+            $event = $line | ConvertFrom-Json
+        } catch {
+            continue
+        }
+
+        $rule = if ($event.PSObject.Properties['rule']) { $event.rule } else { $null }
+        $data = if ($event.PSObject.Properties['data']) { $event.data } else { $null }
+        $decoder = if ($event.PSObject.Properties['decoder']) { $event.decoder } else { $null }
+        $predecoder = if ($event.PSObject.Properties['predecoder']) { $event.predecoder } else { $null }
+
+        return [ordered]@{
+            rule_id = if ($null -ne $rule) { [string]$rule.id } else { '' }
+            rule_description = if ($null -ne $rule) { [string]$rule.description } else { '' }
+            rule_level = if ($null -ne $rule) { [int]$rule.level } else { 0 }
+            ingest_timestamp_utc = [string]$event.timestamp
+            falco_event_timestamp_utc = if ($null -ne $data) { [string]$data.falco_time } else { '' }
+            decoder = if ($null -ne $decoder) { [string]$decoder.name } else { '' }
+            program_name = if ($null -ne $predecoder) { [string]$predecoder.program_name } else { '' }
+            location = [string]$event.location
+        }
+    }
+
+    return $null
+}
+
 if (-not (Get-Command 'kubectl' -ErrorAction SilentlyContinue)) {
     throw 'kubectl no está instalado o no está en PATH.'
+}
+
+if (-not (Get-Command 'docker' -ErrorAction SilentlyContinue)) {
+    throw 'docker no está instalado o no está en PATH.'
 }
 
 if (-not (Test-Path -LiteralPath $absoluteEvidenceRoot)) {
@@ -214,6 +370,16 @@ $summary = [ordered]@{
     }
     actions = @()
     evidence = [ordered]@{}
+    correlation = [ordered]@{
+        rule_id = ''
+        rule_description = ''
+        rule_level = 0
+        ingest_timestamp_utc = ''
+        falco_event_timestamp_utc = ''
+        decoder = ''
+        program_name = ''
+        location = ''
+    }
     limitations = @()
 }
 
@@ -272,6 +438,23 @@ if ($falcosidekickLogs.Text -match 'Syslog - dial udp|i/o timeout|lookup wazuh\.
     $summary.limitations += 'Falcosidekick muestra fallos de salida Syslog/Wazuh. Si el bridge DNS ya resuelve pero Wazuh no está levantado, la limitación real pasa a ser disponibilidad del destino y la evidencia confiable queda en logs locales de Falco.'
 }
 
+Write-Step 'Recolectando evidencia de Wazuh'
+$wazuhAlerts = Invoke-DockerRaw -Arguments @('exec', $WazuhContainerName, 'sh', '-c', 'tail -n 500 /var/ossec/logs/alerts/alerts.json') -AllowFailure
+$wazuhMatches = @(Select-WazuhAlertLines -Lines $wazuhAlerts.Lines -TargetPodName $targetPodName -StartedAtUtc $startedAtUtc)
+Save-TextFile -Path (Join-Path $runDirectory 'wazuh-alerts.jsonl') -Content ($wazuhMatches -join [Environment]::NewLine)
+$summary.evidence.wazuh_matches = $wazuhMatches.Count
+
+if ($wazuhMatches.Count -eq 0) {
+    $summary.limitations += 'Wazuh no generó alertas correlacionables con el pod objetivo dentro de la ventana observada.'
+} else {
+    $wazuhCorrelation = Get-WazuhCorrelation -Lines $wazuhMatches
+    if ($null -ne $wazuhCorrelation) {
+        $summary.correlation = $wazuhCorrelation
+    }
+}
+
+$summary.evidence.end_to_end_demonstrated = ($falcoMatches.Count -gt 0 -and $wazuhMatches.Count -gt 0)
+
 $summaryPath = Join-Path $runDirectory 'summary.json'
 $summaryMarkdownPath = Join-Path $runDirectory 'summary.md'
 $summaryJson = $summary | ConvertTo-Json -Depth 6
@@ -303,9 +486,18 @@ $actionsSection
 ## Evidence files
 - falco-alerts.jsonl -> $($summary.evidence.falco_matches) match(es)
 - tetragon-process-events.jsonl -> $($summary.evidence.tetragon_matches) match(es)
+- wazuh-alerts.jsonl -> $($summary.evidence.wazuh_matches) match(es)
 - target-process-command.txt
 - target-shadow-command.txt
 - falcosidekick.log
+
+## End-to-end status
+- Demonstrated automatically: $($summary.evidence.end_to_end_demonstrated)
+- Wazuh rule: $($summary.correlation.rule_id)
+- Wazuh description: $($summary.correlation.rule_description)
+- Falco event time (from Wazuh payload): $($summary.correlation.falco_event_timestamp_utc)
+- Wazuh ingest time: $($summary.correlation.ingest_timestamp_utc)
+- Decoder/program: $($summary.correlation.decoder) / $($summary.correlation.program_name)
 
 ## Limitations
 $limitationsSection

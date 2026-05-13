@@ -1,9 +1,11 @@
 <!-- Falco / Falcosidekick custom decoders -->
 <decoder name="falcosidekick-syslog">
+  <type>syslog</type>
   <program_name>^falcosidekick$</program_name>
 </decoder>
 
-<decoder name="falcosidekick-json">
+<decoder name="falcosidekick-fields">
   <parent>falcosidekick-syslog</parent>
-  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
+  <regex type="pcre2">"priority":"([^"]+)".*"rule":"([^"]+)".*"source":"([^"]+)".*"time":"([^"]+)"</regex>
+  <order>priority,rule,source,falco_time</order>
 </decoder>

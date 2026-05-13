@@ -1,0 +1,45 @@
+﻿{
+    "started_at_utc":  "2026-05-13T12:36:25Z",
+    "kubectl_context":  "kind-argos-lab",
+    "target":  {
+                   "namespace":  "targets",
+                   "app":  "dvwa",
+                   "pod":  "dvwa-5688bcb659-4hswm",
+                   "node":  "argos-lab-worker"
+               },
+    "sensors":  {
+                    "falco_pod":  "falco-j7rd4",
+                    "tetragon_pod":  "tetragon-5xnrl"
+                },
+    "actions":  [
+                    {
+                        "name":  "process_exec_probe",
+                        "command":  "id \u0026\u0026 whoami \u0026\u0026 cat /etc/os-release | sed -n 1,2p",
+                        "exit_code":  0
+                    },
+                    {
+                        "name":  "falco_sensitive_file_probe",
+                        "command":  "cat /etc/shadow \u003e /dev/null",
+                        "exit_code":  0
+                    }
+                ],
+    "evidence":  {
+                     "falco_matches":  1,
+                     "tetragon_matches":  10,
+                     "wazuh_matches":  0,
+                     "end_to_end_demonstrated":  false
+                 },
+    "correlation":  {
+                        "rule_id":  "",
+                        "rule_description":  "",
+                        "rule_level":  0,
+                        "ingest_timestamp_utc":  "",
+                        "falco_event_timestamp_utc":  "",
+                        "decoder":  "",
+                        "program_name":  "",
+                        "location":  ""
+                    },
+    "limitations":  [
+                        "Wazuh no generÃ³ alertas correlacionables con el pod objetivo dentro de la ventana observada."
+                    ]
+}
