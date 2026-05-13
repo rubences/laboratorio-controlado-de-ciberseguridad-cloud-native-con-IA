@@ -1,0 +1,9 @@
+<!-- Falco / Falcosidekick custom decoders -->
+<decoder name="falcosidekick-syslog">
+  <program_name>^falcosidekick$</program_name>
+</decoder>
+
+<decoder name="falcosidekick-json">
+  <parent>falcosidekick-syslog</parent>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
+</decoder>

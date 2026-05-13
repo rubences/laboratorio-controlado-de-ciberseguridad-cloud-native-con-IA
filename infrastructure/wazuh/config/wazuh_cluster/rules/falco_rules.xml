@@ -1,0 +1,34 @@
+<!-- Falco / Falcosidekick custom rules -->
+<group name="falco,falcosidekick,container,syslog,">
+
+  <rule id="110000" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="rule">.+</field>
+    <field name="priority">.+</field>
+    <description>Falco event received via Falcosidekick: $(rule)</description>
+    <group>falco,falcosidekick,container_runtime,</group>
+  </rule>
+
+  <rule id="110001" level="8">
+    <if_sid>110000</if_sid>
+    <field name="priority">^Warning$|^warning$</field>
+    <description>Falco warning: $(rule)</description>
+    <group>falco_warning,</group>
+  </rule>
+
+  <rule id="110002" level="10">
+    <if_sid>110000</if_sid>
+    <field name="priority">^Error$|^Critical$|^Alert$|^Emergency$|^error$|^critical$|^alert$|^emergency$</field>
+    <description>Falco high severity event: $(rule)</description>
+    <group>falco_high_severity,</group>
+  </rule>
+
+  <rule id="110003" level="10">
+    <if_sid>110001</if_sid>
+    <field name="rule">^Read sensitive file untrusted$</field>
+    <field name="output_fields.fd.name">^/etc/shadow$</field>
+    <description>Falco detected untrusted access to /etc/shadow in container $(output_fields.container.name)</description>
+    <group>falco_sensitive_file,mitre_T1555,credential_access,</group>
+  </rule>
+
+</group>

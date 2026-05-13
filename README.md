@@ -395,6 +395,7 @@ Bridge honesto Falco -> Wazuh en este entorno:
 
 - `infrastructure/k8s/security/wazuh-syslog-bridge.yaml` declara `falco/wazuh-syslog-bridge` como `ExternalName -> host.docker.internal`
 - `falco-values.yaml` hace que Falcosidekick envíe Syslog a `wazuh-syslog-bridge.falco.svc.cluster.local:514/UDP`
+- Falcosidekick está configurado con `SYSLOG_FORMAT=json`, así que Wazuh necesita decoder/rules para `falcosidekick: { ...json... }`; el repo ahora monta `infrastructure/wazuh/config/wazuh_cluster/decoders/falco_decoders.xml` y `infrastructure/wazuh/config/wazuh_cluster/rules/falco_rules.xml`
 - esto resuelve el gap de DNS/bridge dentro de Kind sobre Docker Desktop/WSL2
 - esto **NO** significa que Wazuh esté siempre arriba: si `wazuh.manager` no está corriendo en Docker, Falcosidekick puede seguir fallando por disponibilidad del destino aunque el DNS ya esté resuelto
 
